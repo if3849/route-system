@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Route System Inc. — Approval System</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --black: #0a0a0a; --dark: #111111; --dark2: #1a1a1a; --dark3: #222222;
+      --gray: #3a3a3a; --mid: #888888; --light: #cccccc; --white: #f0f0f0;
+      --accent: #c8a96e; --accent2: #e8c98e; --green: #4a9e6b; --red: #c0392b; --blue: #2980b9;
+    }
+    html, body { height: 100%; }
+    body { background: var(--black); color: var(--white); font-family: 'Barlow', sans-serif; font-weight: 300; overflow-x: hidden; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--dark); }
+    ::-webkit-scrollbar-thumb { background: var(--accent); }
+
+    #loginScreen {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: repeating-linear-gradient(0deg, transparent, transparent 79px, rgba(255,255,255,0.02) 80px),
+                  repeating-linear-gradient(90deg, transparent, transparent 79px, rgba(255,255,255,0.02) 80px);
+    }
+    .login-box { background: var(--dark); border: 1px solid var(--gray); padding: 3rem 2.5rem; width: 100%; max-width: 400px; position: relative; }
+    .login-box::before { content:''; position:absolute; top:-1px; left:40px; width:80px; height:3px; background:var(--accent); }
+    .login-logo { font-family:'Bebas Neue',sans-serif; font-size:1.8rem; letter-spacing:3px; margin-bottom:0.3rem; }
+    .login-logo span { color:var(--accent); }
+    .login-sub { font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; letter-spacing:3px; text-transform:uppercase; color:var(--mid); margin-bottom:2.5rem; }
+    .field-label { font-family:'Barlow Condensed',sans-serif; font-size:0.7rem; letter-spacing:2px; text-transform:uppercase; color:var(--accent); margin-bottom:0.4rem; display:block; }
+    .field-input { width:100%; background:var(--dark2); border:1px solid var(--gray); color:var(--white); padding:11px 14px; font-family:'Barlow',sans-serif; font-size:0.95rem; outline:none; margin-bottom:1.2rem; transition:border-color 0.2s; }
+    .field-input:focus { border-color:var(--accent); }
+    select.field-input { cursor:pointer; }
+    textarea.field-input { resize:vertical; min-height:100px; }
+    .btn { font-family:'Barlow Condensed',sans-serif; font-size:0.85rem; letter-spacing:2px; text-transform:uppercase; border:none; padding:12px 24px; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:0.5rem; }
+    .btn-gold { background:var(--accent); color:var(--black); }
+    .btn-gold:hover { background:var(--accent2); }
+    .btn-outline { background:transparent; color:var(--light); border:1px solid var(--gray); }
+    .btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+    .btn-green { background:var(--green); color:white; }
+    .btn-green:hover { background:#3d8a5c; }
+    .btn-red { background:var(--red); color:white; }
+    .btn-red:hover { background:#a93226; }
+    .login-error { background:rgba(192,57,43,0.15); border:1px solid var(--red); color:#e74c3c; padding:10px 14px; font-size:0.85rem; margin-bottom:1rem; display:none; }
+
+    #app { display:none; min-height:100vh; }
+    .topbar { position:fixed; top:0; left:0; right:0; z-index:100; height:60px; background:rgba(10,10,10,0.97); border-bottom:1px solid rgba(200,169,110,0.2); display:flex; align-items:center; justify-content:space-between; padding:0 1.5rem; backdrop-filter:blur(8px); }
+    .topbar-logo { font-family:'Bebas Neue',sans-serif; font-size:1.3rem; letter-spacing:3px; }
+    .topbar-logo a { color:var(--white); text-decoration:none; }
+    .topbar-logo span { color:var(--accent); }
+    .topbar-right { display:flex; align-items:center; gap:1.5rem; }
+    .topbar-user { font-size:0.85rem; color:var(--light); display:flex; align-items:center; gap:0.5rem; }
+    .user-dot { width:8px; height:8px; background:var(--green); border-radius:50%; }
+    .topbar-logout { font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; color:var(--mid); cursor:pointer; transition:color 0.2s; }
+    .topbar-logout:hover { color:var(--accent); }
+
+    .sidebar { position:fixed; top:60px; left:0; bottom:0; width:220px; background:var(--dark); border-right:1px solid var(--dark3); padding:1.5rem 0; z-index:90; overflow-y:auto; }
+    .sidebar-section { font-family:'Barlow Condensed',sans-serif; font-size:0.65rem; letter-spacing:3px; text-transform:uppercase; color:var(--gray); padding:0.8rem 1.5rem 0.5rem; }
+    .sidebar-item { display:flex; align-items:center; gap:0.8rem; padding:0.7rem 1.5rem; cursor:pointer; font-size:0.9rem; color:var(--mid); transition:all 0.2s; border-left:3px solid transparent; }
+    .sidebar-item:hover { color:var(--white); background:var(--dark2); }
+    .sidebar-item.active { color:var(--accent); border-left-color:var(--accent); background:var(--dark2); }
+    .badge { background:var(--accent); color:var(--black); font-size:0.65rem; font-weight:600; padding:1px 6px; border-radius:10px; margin-left:auto; }
+
+    .main { margin-left:220px; padding-top:60px; min-height:100vh; }
+    .page { display:none; padding:2rem; }
+    .page.active { display:block; }
+    .page-header { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:2rem; padding-bottom:1.5rem; border-bottom:1px solid var(--dark3); flex-wrap:wrap; gap:1rem; }
+    .page-title-tag { font-family:'Barlow Condensed',sans-serif; font-size:0.7rem; letter-spacing:3px; text-transform:uppercase; color:var(--accent); margin-bottom:0.3rem; }
+    .page-title { font-family:'Bebas Neue',sans-serif; font-size:2.2rem; letter-spacing:2px; }
+
+    .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--dark3); margin-bottom:2rem; }
+    .stat-card { background:var(--dark); padding:1.5rem; position:relative; }
+    .stat-card::before { content:''; position:absolute; top:0; left:0; width:3px; height:100%; }
+    .stat-card.gold::before { background:var(--accent); }
+    .stat-card.green::before { background:var(--green); }
+    .stat-card.red::before { background:var(--red); }
+    .stat-num { font-family:'Bebas Neue',sans-serif; font-size:2.5rem; line-height:1; margin-bottom:0.3rem; }
+    .stat-card.gold .stat-num { color:var(--accent); }
+    .stat-card.green .stat-num { color:var(--green); }
+    .stat-card.red .stat-num { color:var(--red); }
+    .stat-label { font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; color:var(--mid); }
+
+    .table-wrap { background:var(--dark); border:1px solid var(--dark3); }
+    .table-toolbar { display:flex; align-items:center; justify-content:space-between; padding:1rem 1.5rem; border-bottom:1px solid var(--dark3); flex-wrap:wrap; gap:0.8rem; }
+    .table-title { font-family:'Barlow Condensed',sans-serif; font-size:0.8rem; letter-spacing:2px; text-transform:uppercase; color:var(--light); }
+    .search-input { background:var(--dark2); border:1px solid var(--gray); color:var(--white); padding:8px 12px; font-family:'Barlow',sans-serif; font-size:0.85rem; outline:none; width:200px; transition:border-color 0.2s; }
+    .search-input:focus { border-color:var(--accent); }
+    table { width:100%; border-collapse:collapse; }
+    th { background:var(--dark2); font-family:'Barlow Condensed',sans-serif; font-size:0.7rem; letter-spacing:2px; text-transform:uppercase; color:var(--mid); padding:0.9rem 1.2rem; text-align:left; border-bottom:1px solid var(--dark3); white-space:nowrap; }
+    td { padding:0.8rem 1.2rem; font-size:0.88rem; color:var(--light); border-bottom:1px solid var(--dark3); vertical-align:middle; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:var(--dark2); }
+    .status-badge { font-family:'Barlow Condensed',sans-serif; font-size:0.7rem; letter-spacing:1px; text-transform:uppercase; padding:3px 10px; display:inline-block; white-space:nowrap; }
+    .status-pending { background:rgba(200,169,110,0.15); color:var(--accent); border:1px solid rgba(200,169,110,0.3); }
+    .status-approved { background:rgba(74,158,107,0.15); color:var(--green); border:1px solid rgba(74,158,107,0.3); }
+    .status-rejected { background:rgba(192,57,43,0.15); color:#e74c3c; border:1px solid rgba(192,57,43,0.3); }
+    .status-draft { background:rgba(136,136,136,0.15); color:var(--mid); border:1px solid rgba(136,136,136,0.3); }
+    .btn-sm { font-family:'Barlow Condensed',sans-serif; font-size:0.7rem; letter-spacing:1px; text-transform:uppercase; border:none; padding:5px 12px; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+    .btn-sm-accent { background:var(--accent); color:var(--black); }
+    .btn-sm-accent:hover { background:var(--accent2); }
+    .btn-sm-outline { background:transparent; color:var(--mid); border:1px solid var(--gray); }
+    .btn-sm-outline:hover { border-color:var(--accent); color:var(--accent); }
+    .empty-row td { text-align:center; color:var(--gray); padding:3rem; font-style:italic; }
+
+    .modal-overlay { display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.8); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:1rem; }
+    .modal-overlay.open { display:flex; }
+    .modal { background:var(--dark); border:1px solid var(--gray); width:100%; max-width:640px; max-height:90vh; overflow-y:auto; position:relative; }
+    .modal::before { content:''; position:absolute; top:-1px; left:40px; width:60px; height:3px; background:var(--accent); }
+    .modal-header { padding:1.5rem 2rem; border-bottom:1px solid var(--dark3); display:flex; align-items:center; justify-content:space-between; }
+    .modal-title { font-family:'Bebas Neue',sans-serif; font-size:1.5rem; letter-spacing:2px; }
+    .modal-close { background:none; border:none; color:var(--mid); font-size:1.4rem; cursor:pointer; transition:color 0.2s; line-height:1; }
+    .modal-close:hover { color:var(--accent); }
+    .modal-body { padding:2rem; }
+    .modal-footer { padding:1rem 2rem; border-top:1px solid var(--dark3); display:flex; gap:0.8rem; justify-content:flex-end; flex-wrap:wrap; }
+    .form-group { margin-bottom:1.2rem; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    .detail-row { display:flex; gap:1rem; padding:0.7rem 0; border-bottom:1px solid var(--dark3); font-size:0.9rem; }
+    .detail-label { font-family:'Barlow Condensed',sans-serif; font-size:0.7rem; letter-spacing:2px; text-transform:uppercase; color:var(--accent); min-width:130px; padding-top:2px; flex-shrink:0; }
+    .detail-value { color:var(--white); flex:1; }
+    .file-item { display:flex; align-items:center; gap:0.5rem; font-size:0.82rem; color:var(--light); padding:0.3rem 0; }
+    .file-item a { color:var(--accent); text-decoration:none; }
+    .file-item a:hover { text-decoration:underline; }
+    .history-item { display:flex; gap:1rem; align-items:flex-start; padding:0.8rem 0; border-bottom:1px solid var(--dark3); }
+    .history-dot { width:10px; height:10px; border-radius:50%; margin-top:4px; flex-shrink:0; }
+    .h-pending { background:var(--accent); } .h-approved { background:var(--green); }
+    .h-rejected { background:var(--red); } .h-draft { background:var(--mid); }
+    .history-text { font-size:0.85rem; color:var(--light); line-height:1.6; }
+    .history-time { font-size:0.75rem; color:var(--mid); }
+
+    /* APPROVAL LINE */
+    .approver-line { display:flex; flex-direction:column; gap:0.5rem; }
+    .approver-row { display:flex; align-items:center; gap:0.6rem; }
+    .approver-step-num { font-family:'Bebas Neue',sans-serif; font-size:1.1rem; color:var(--accent); min-width:22px; }
+    .approver-row select { flex:1; margin-bottom:0 !important; }
+    .btn-add-approver { background:transparent; border:1px dashed var(--gray); color:var(--mid); padding:8px; cursor:pointer; font-size:0.8rem; width:100%; margin-top:0.5rem; transition:all 0.2s; font-family:'Barlow Condensed',sans-serif; letter-spacing:1px; }
+    .btn-add-approver:hover { border-color:var(--accent); color:var(--accent); }
+    .btn-remove-approver { background:none; border:none; color:var(--mid); cursor:pointer; font-size:1rem; padding:2px 6px; transition:color 0.2s; flex-shrink:0; }
+    .btn-remove-approver:hover { color:var(--red); }
+
+    /* PROGRESS DOTS */
+    .approval-progress { display:flex; align-items:flex-start; flex-wrap:wrap; gap:0.2rem; margin:0.5rem 0; }
+    .progress-step { display:flex; flex-direction:column; align-items:center; gap:0.2rem; }
+    .progress-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:600; border:2px solid; flex-shrink:0; }
+    .progress-dot.done { background:var(--green); border-color:var(--green); color:white; }
+    .progress-dot.current { background:var(--accent); border-color:var(--accent); color:var(--black); }
+    .progress-dot.rejected-dot { background:var(--red); border-color:var(--red); color:white; }
+    .progress-dot.waiting { background:transparent; border-color:var(--gray); color:var(--mid); }
+    .progress-arrow { color:var(--gray); font-size:0.8rem; margin-top:7px; }
+    .progress-name { font-size:0.65rem; color:var(--mid); text-align:center; max-width:50px; line-height:1.2; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+
+    /* USERS & SETTINGS */
+    .user-card { background:var(--dark); border:1px solid var(--dark3); padding:1.5rem; display:flex; align-items:center; justify-content:space-between; margin-bottom:1px; transition:background 0.2s; flex-wrap:wrap; gap:1rem; }
+    .user-card:hover { background:var(--dark2); }
+    .user-avatar { width:42px; height:42px; background:var(--gray); display:flex; align-items:center; justify-content:center; font-family:'Bebas Neue',sans-serif; font-size:1.1rem; color:var(--accent); flex-shrink:0; }
+    .user-info { flex:1; margin-left:1rem; min-width:200px; }
+    .user-name { font-weight:500; color:var(--white); margin-bottom:0.2rem; }
+    .user-role { font-family:'Barlow Condensed',sans-serif; font-size:0.7rem; letter-spacing:1px; text-transform:uppercase; color:var(--mid); }
+    .settings-card { background:var(--dark); border:1px solid var(--dark3); padding:2rem; margin-bottom:1.5rem; max-width:700px; position:relative; }
+    .settings-card::before { content:''; position:absolute; top:-1px; left:40px; width:50px; height:3px; background:var(--accent); }
+    .settings-head { font-family:'Barlow Condensed',sans-serif; font-size:0.8rem; letter-spacing:3px; text-transform:uppercase; color:var(--accent); margin-bottom:1.5rem; }
+    .info-box { background:rgba(200,169,110,0.08); border:1px solid rgba(200,169,110,0.2); padding:0.8rem 1rem; font-size:0.82rem; color:var(--light); margin-bottom:1.2rem; line-height:1.8; }
+    .info-box a { color:var(--accent); }
+    .step-guide { list-style:none; counter-reset:steps; }
+    .step-guide li { counter-increment:steps; display:flex; gap:0.8rem; margin-bottom:0.8rem; font-size:0.88rem; color:var(--light); line-height:1.6; }
+    .step-guide li::before { content:counter(steps); background:var(--accent); color:var(--black); width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; flex-shrink:0; margin-top:2px; }
+    code { color:var(--accent); background:var(--dark3); padding:1px 5px; font-size:0.85em; }
+
+    @media (max-width: 768px) {
+      .sidebar { display:none; }
+      .main { margin-left:0; }
+      .stats-grid { grid-template-columns:1fr 1fr; }
+      .form-row { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">ROUTE <span>SYSTEM</span></div>
+    <div class="login-sub">Approval System</div>
+    <div class="login-error" id="loginError">Invalid ID or password.</div>
+    <label class="field-label">User ID</label>
+    <input class="field-input" type="text" id="loginId" placeholder="Enter your ID" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <label class="field-label">Password</label>
+    <input class="field-input" type="password" id="loginPw" placeholder="Enter your password" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <button class="btn btn-gold" onclick="doLogin()" style="width:100%;justify-content:center;">LOGIN →</button>
+      <div style="margin-top:1.5rem;font-size:0.8rem;color:var(--gray);">
+        Route System Inc. — Staff Portal<br>
+        문의: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="8af9faebf8e1caf8e5fffeefa7f9f3f9feefe7a4e9e5e7">[email&#160;protected]</a>
+      </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo"><a href="index.html">ROUTE <span>SYSTEM</span></a> — APPROVAL</div>
+    <div class="topbar-right">
+      <div class="topbar-user"><div class="user-dot"></div><span id="topbarUser">—</span></div>
+      <div class="topbar-logout" onclick="doLogout()">Logout</div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-section">Main</div>
+    <div class="sidebar-item active" onclick="showPage('dashboard')" id="nav-dashboard">📊 <span>Dashboard</span></div>
+    <div class="sidebar-item" onclick="showPage('new')" id="nav-new">✏️ <span>New Document</span></div>
+    <div class="sidebar-section">Documents</div>
+    <div class="sidebar-item" onclick="showPage('mine')" id="nav-mine">📄 <span>My Documents</span></div>
+    <div class="sidebar-item" onclick="showPage('pending')" id="nav-pending">⏳ <span>Pending Approval</span><span class="badge" id="pendingBadge" style="display:none">0</span></div>
+    <div class="sidebar-item" onclick="showPage('all')" id="nav-all">🗂️ <span>All Documents</span></div>
+    <div class="sidebar-section">System</div>
+    <div class="sidebar-item" onclick="showPage('users')" id="nav-users">👥 <span>Users</span></div>
+    <div class="sidebar-item" onclick="showPage('settings')" id="nav-settings">⚙️ <span>Settings</span></div>
+  </div>
+
+  <div class="main">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div><div class="page-title-tag">Overview</div><div class="page-title">DASHBOARD</div></div>
+        <button class="btn btn-gold" onclick="showPage('new')">+ New Document</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card gold"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Total</div></div>
+        <div class="stat-card gold"><div class="stat-num" id="stat-pending" style="color:var(--accent)">0</div><div class="stat-label">Pending</div></div>
+        <div class="stat-card green"><div class="stat-num" id="stat-approved">0</div><div class="stat-label">Approved</div></div>
+        <div class="stat-card red"><div class="stat-num" id="stat-rejected">0</div><div class="stat-label">Rejected</div></div>
+      </div>
+      <div class="table-wrap">
+        <div class="table-toolbar"><div class="table-title">Recent Documents</div></div>
+        <table><thead><tr><th>Doc No.</th><th>Title</th><th>Type</th><th>Requester</th><th>Progress</th><th>Date</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="recentTable"></tbody></table>
+      </div>
+    </div>
+
+    <!-- NEW DOCUMENT -->
+    <div class="page" id="page-new">
+      <div class="page-header"><div><div class="page-title-tag">Create</div><div class="page-title">NEW DOCUMENT</div></div></div>
+      <div style="max-width:680px;background:var(--dark);border:1px solid var(--dark3);padding:2rem;position:relative;">
+        <div style="position:absolute;top:-1px;left:40px;width:60px;height:3px;background:var(--accent)"></div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="field-label">Document Type</label>
+            <select class="field-input" id="docType">
+              <option value="">— Select Type —</option>
+              <option>Purchase Request</option><option>Expense Report</option>
+              <option>Leave Request</option><option>Project Approval</option>
+              <option>Contract Review</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="field-label">Priority</label>
+            <select class="field-input" id="docPriority">
+              <option value="Normal">Normal</option><option value="High">High</option><option value="Urgent">Urgent</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Title</label>
+          <input class="field-input" type="text" id="docTitle" placeholder="Enter document title"/>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Approval Line — 순차 결재라인</label>
+          <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">결재자를 순서대로 추가하세요. 1번 결재 후 2번으로 자동 전달됩니다.</div>
+          <div class="approver-line" id="approverLine"></div>
+          <button class="btn-add-approver" onclick="addApproverRow()">+ 결재자 추가 / Add Approver</button>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Content / Details</label>
+          <textarea class="field-input" id="docContent" placeholder="Describe the purpose and details..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Attach File</label>
+          <input class="field-input" type="file" id="docFile" multiple style="padding:8px 14px;cursor:pointer;" onchange="checkFileSize(this)"/>
+          <div style="font-size:0.75rem;color:var(--mid);margin-top:0.3rem;">파일당 최대 3MB / 전체 합계 5MB 이하 (Max 3MB per file / 5MB total)</div>
+          <div id="fileSizeWarning" style="display:none;margin-top:0.5rem;background:rgba(192,57,43,0.15);border:1px solid var(--red);color:#e74c3c;padding:10px 14px;font-size:0.85rem;"></div>
+          <div id="fileSizeOk" style="display:none;margin-top:0.5rem;background:rgba(74,158,107,0.15);border:1px solid var(--green);color:var(--green);padding:10px 14px;font-size:0.85rem;"></div>
+        </div>
+        <div style="display:flex;gap:1rem;margin-top:0.5rem;">
+          <button class="btn btn-gold" onclick="submitDoc('pending')">Submit for Approval →</button>
+          <button class="btn btn-outline" onclick="submitDoc('draft')">Save as Draft</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MY DOCUMENTS -->
+    <div class="page" id="page-mine">
+      <div class="page-header">
+        <div><div class="page-title-tag">My</div><div class="page-title">MY DOCUMENTS</div></div>
+        <button class="btn btn-gold" onclick="showPage('new')">+ New</button>
+      </div>
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <div class="table-title">Documents I Submitted</div>
+          <input class="search-input" type="text" placeholder="Search..." oninput="filterTable('mineTable',this.value)"/>
+        </div>
+        <table><thead><tr><th>Doc No.</th><th>Title</th><th>Type</th><th>Progress</th><th>Date</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="mineTable"></tbody></table>
+      </div>
+    </div>
+
+    <!-- PENDING -->
+    <div class="page" id="page-pending">
+      <div class="page-header"><div><div class="page-title-tag">Action Required</div><div class="page-title">PENDING APPROVAL</div></div></div>
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <div class="table-title">Documents Awaiting Your Approval</div>
+          <input class="search-input" type="text" placeholder="Search..." oninput="filterTable('pendingTable',this.value)"/>
+        </div>
+        <table><thead><tr><th>Doc No.</th><th>Title</th><th>Type</th><th>Requester</th><th>Priority</th><th>My Step</th><th>Date</th><th>Action</th></tr></thead>
+        <tbody id="pendingTable"></tbody></table>
+      </div>
+    </div>
+
+    <!-- ALL DOCUMENTS -->
+    <div class="page" id="page-all">
+      <div class="page-header"><div><div class="page-title-tag">Archive</div><div class="page-title">ALL DOCUMENTS</div></div></div>
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <div class="table-title">Complete Document Log</div>
+          <input class="search-input" type="text" placeholder="Search..." oninput="filterTable('allTable',this.value)"/>
+        </div>
+        <table><thead><tr><th>Doc No.</th><th>Title</th><th>Type</th><th>Requester</th><th>Progress</th><th>Date</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="allTable"></tbody></table>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div class="page" id="page-users">
+      <div class="page-header">
+        <div><div class="page-title-tag">System</div><div class="page-title">USERS</div></div>
+        <button class="btn btn-gold" id="addUserBtn" onclick="openAddUser()" style="display:none">+ Add User</button>
+      </div>
+      <div id="userList"></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <div class="page-header"><div><div class="page-title-tag">Configuration</div><div class="page-title">SETTINGS</div></div></div>
+      <div class="settings-card">
+        <div class="settings-head">📧 Email Notification — EmailJS Setup</div>
+        <div class="info-box">
+          이메일 알림 기능은 <strong>EmailJS</strong> 무료 서비스를 사용합니다.<br>
+          결재 요청 및 승인/반려 시 담당자에게 자동으로 이메일이 발송됩니다.<br>
+          무료 플랜: 월 200건 발송 가능 &nbsp;→&nbsp; <a href="https://www.emailjs.com" target="_blank">emailjs.com</a>
+        </div>
+        <div class="settings-head" style="margin-bottom:1rem;">⚙️ Setup Guide (설정 방법)</div>
+        <ol class="step-guide">
+          <li><strong>emailjs.com</strong> 무료 회원가입</li>
+          <li><strong>Email Services</strong> → Add Service → Gmail 선택 후 계정 연결</li>
+          <li><strong>Email Templates</strong> → Create New Template<br>
+            아래 변수를 Template에 사용하세요:<br>
+            <code>{{to_email}}</code> <code>{{to_name}}</code> <code>{{doc_no}}</code> <code>{{doc_title}}</code> <code>{{doc_type}}</code> <code>{{requester}}</code> <code>{{action}}</code> <code>{{comment}}</code> <code>{{priority}}</code>
+          </li>
+          <li>아래에 <strong>Public Key, Service ID, Template ID</strong> 입력 후 저장</li>
+          <li><strong>Users 페이지</strong>에서 각 유저의 이메일 주소 등록</li>
+        </ol>
+        <div style="margin-top:1.5rem;">
+          <div class="form-group">
+            <label class="field-label">EmailJS Public Key</label>
+            <input class="field-input" type="text" id="ejsPublicKey" placeholder="e.g. aBcDeFgHiJkLmNoPq"/>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="field-label">Service ID</label>
+              <input class="field-input" type="text" id="ejsServiceId" placeholder="service_xxxxxxx"/>
+            </div>
+            <div class="form-group">
+              <label class="field-label">Template ID</label>
+              <input class="field-input" type="text" id="ejsTemplateId" placeholder="template_xxxxxxx"/>
+            </div>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-gold" onclick="saveEmailSettings()">Save Settings →</button>
+            <button class="btn btn-outline" onclick="testEmail()">Send Test Email</button>
+            <span id="emailSettingStatus" style="font-size:0.82rem;color:var(--mid);"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Document Detail</div>
+      <button class="modal-close" onclick="closeModal('detailModal')">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer" id="modalFooter"></div>
+  </div>
+</div>
+
+<!-- APPROVE MODAL -->
+<div class="modal-overlay" id="approveModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title" id="approveModalTitle">Approve Document</div>
+      <button class="modal-close" onclick="closeModal('approveModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="field-label">Comment (Optional)</label>
+        <textarea class="field-input" id="approveComment" placeholder="Leave a comment..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer" id="approveFooter"></div>
+  </div>
+</div>
+
+<!-- EDIT USER MODAL -->
+<div class="modal-overlay" id="editUserModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><div class="modal-title">Edit User</div><button class="modal-close" onclick="closeModal('editUserModal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="editUserId"/>
+      <div class="form-group"><label class="field-label">Full Name</label><input class="field-input" type="text" id="editUserName"/></div>
+      <div class="form-group"><label class="field-label">Email Address <span style="color:var(--red);font-size:0.75rem;">* Required for email notifications</span></label><input class="field-input" type="email" id="editUserEmail" placeholder="user@company.com"/></div>
+      <div class="form-group"><label class="field-label">New Password <span style="color:var(--mid);font-size:0.75rem;">(blank = keep current)</span></label><input class="field-input" type="password" id="editUserPw" placeholder="New password"/></div>
+      <div class="form-group"><label class="field-label">Role</label><select class="field-input" id="editUserRole"><option value="Staff">Staff</option><option value="Manager">Manager</option><option value="Admin">Admin</option></select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('editUserModal')">Cancel</button>
+      <button class="btn btn-gold" onclick="saveEditUser()">Save Changes →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD USER MODAL -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><div class="modal-title">Add User</div><button class="modal-close" onclick="closeModal('userModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="field-label">Full Name</label><input class="field-input" type="text" id="newUserName" placeholder="John Smith"/></div>
+      <div class="form-group"><label class="field-label">User ID</label><input class="field-input" type="text" id="newUserId" placeholder="johnsmith"/></div>
+      <div class="form-group"><label class="field-label">Email Address</label><input class="field-input" type="email" id="newUserEmail" placeholder="john@company.com"/></div>
+      <div class="form-group"><label class="field-label">Password</label><input class="field-input" type="password" id="newUserPw" placeholder="Password"/></div>
+      <div class="form-group"><label class="field-label">Role</label><select class="field-input" id="newUserRole"><option value="Staff">Staff</option><option value="Manager">Manager</option><option value="Admin">Admin</option></select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('userModal')">Cancel</button>
+      <button class="btn btn-gold" onclick="addUser()">Add User →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── DATA ──
+// 유저 정보는 항상 코드에서 로드 (localStorage 무시)
+let users = [
+  { id:'spark@route-system.com',        name:'Sung Eun Park',  pw:'Spark@2026',  role:'Admin',  email:'spark@route-system.com' },
+  { id:'mkim@route-system.com',         name:'Minki Kim',      pw:'Mkim@2026',   role:'Admin',  email:'mkim@route-system.com' },
+  { id:'kcho@route-system.com',         name:'Kyle Cho',       pw:'Kcho@2026',   role:'Staff',  email:'kcho@route-system.com' },
+  { id:'hosungha74@route-system.com',   name:'Hosung Ha',      pw:'Hha@2026',    role:'Staff',  email:'hosungha74@route-system.com' },
+  { id:'jonghyun.lee@route-system.com', name:'Jonghyun Lee',   pw:'Jlee@2026',   role:'Staff',  email:'jonghyun.lee@route-system.com' },
+];
+let docs = JSON.parse(localStorage.getItem('rs_docs') || '[]');
+let currentUser = null;
+let currentDocId = null;
+let docCounter = parseInt(localStorage.getItem('rs_counter') || '0');
+// EmailJS 설정 (코드에 직접 입력 — 변경 시 여기를 수정하세요)
+const EMAIL_PUBLIC_KEY  = 'UeNmq8x-Jq_IcPeHG';
+const EMAIL_SERVICE_ID  = 'service_mk3827x';
+const EMAIL_TEMPLATE_ID = 'template_6yqfkkb';
+let emailCfg = JSON.parse(localStorage.getItem('rs_email') || 'null') || {
+  publicKey:  EMAIL_PUBLIC_KEY,
+  serviceId:  EMAIL_SERVICE_ID,
+  templateId: EMAIL_TEMPLATE_ID
+};
+let approverRows = [];
+
+function saveData() {
+  // 유저 정보는 코드에서 관리 (localStorage 저장 안 함)
+  // localStorage.setItem('rs_users', JSON.stringify(users));
+  localStorage.setItem('rs_docs', JSON.stringify(docs));
+  localStorage.setItem('rs_counter', String(docCounter));
+}
+function saveEmailCfg() { localStorage.setItem('rs_email', JSON.stringify(emailCfg)); }
+
+// EmailJS init
+if (emailCfg.publicKey) { try { emailjs.init(emailCfg.publicKey); } catch(e){} }
+
+async function sendEmail(toId, doc, action, comment) {
+  if (!emailCfg.publicKey || !emailCfg.serviceId || !emailCfg.templateId) return;
+  const toUser = users.find(u => u.id === toId);
+  if (!toUser || !toUser.email) return;
+  const requester = users.find(u => u.id === doc.requesterId);
+  const actionLabels = {
+    submitted: 'A new document requires your approval',
+    approved:  'Document has been fully approved',
+    rejected:  'Document has been rejected',
+    step_approved: 'Previous step approved — your approval is now required'
+  };
+  try {
+    await emailjs.send(emailCfg.serviceId, emailCfg.templateId, {
+      to_email: toUser.email, to_name: toUser.name,
+      doc_no: doc.docNo, doc_title: doc.title, doc_type: doc.type,
+      requester: requester ? requester.name : doc.requesterId,
+      action: actionLabels[action] || action,
+      comment: comment || '—', priority: doc.priority
+    });
+  } catch(e) { console.warn('Email failed:', e); }
+}
+
+// ── LOGIN / LOGOUT ──
+function doLogin() {
+  const id = document.getElementById('loginId').value.trim();
+  const pw = document.getElementById('loginPw').value;
+  const user = users.find(u => u.id === id && u.pw === pw);
+  if (!user) { document.getElementById('loginError').style.display = 'block'; return; }
+  currentUser = user;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('topbarUser').textContent = user.name + ' (' + user.role + ')';
+  refreshAll(); showPage('dashboard');
+}
+function doLogout() {
+  currentUser = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginId').value = '';
+  document.getElementById('loginPw').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+// ── NAVIGATION ──
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const nav = document.getElementById('nav-' + name);
+  if (nav) nav.classList.add('active');
+  refreshPage(name);
+}
+
+function isMyTurn(doc) {
+  if (doc.status !== 'pending' || !doc.approvers || !doc.approvers.length) return false;
+  const step = doc.currentStep || 0;
+  return doc.approvers[step] && doc.approvers[step].id === currentUser.id && doc.approvers[step].status === 'pending';
+}
+
+function refreshAll() {
+  refreshPage('dashboard');
+  const cnt = docs.filter(d => isMyTurn(d)).length;
+  const badge = document.getElementById('pendingBadge');
+  badge.textContent = cnt; badge.style.display = cnt > 0 ? 'inline-block' : 'none';
+}
+
+function refreshPage(name) {
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'mine') renderTable('mineTable', docs.filter(d => d.requesterId === currentUser.id), 'mine');
+  if (name === 'pending') renderTable('pendingTable', docs.filter(d => isMyTurn(d)), 'pending');
+  if (name === 'all') renderTable('allTable', docs, 'all');
+  if (name === 'users') renderUsers();
+  if (name === 'new') { buildApproverLine(); }
+  if (name === 'settings') loadEmailSettings();
+}
+
+// ── DASHBOARD ──
+function renderDashboard() {
+  document.getElementById('stat-total').textContent = docs.length;
+  document.getElementById('stat-pending').textContent = docs.filter(d => d.status === 'pending').length;
+  document.getElementById('stat-approved').textContent = docs.filter(d => d.status === 'approved').length;
+  document.getElementById('stat-rejected').textContent = docs.filter(d => d.status === 'rejected').length;
+  renderTable('recentTable', [...docs].sort((a,b)=>b.createdAt-a.createdAt).slice(0,8), 'all');
+}
+
+// ── PROGRESS ──
+function progressHtml(doc) {
+  if (!doc.approvers || !doc.approvers.length) return '<span style="color:var(--mid);font-size:0.8rem">—</span>';
+  const step = doc.currentStep || 0;
+  return '<div class="approval-progress">' + doc.approvers.map((a, i) => {
+    let cls = 'waiting', lbl = i + 1;
+    if (a.status === 'approved') { cls = 'done'; lbl = '✓'; }
+    else if (a.status === 'rejected') { cls = 'rejected-dot'; lbl = '✕'; }
+    else if (i === step && doc.status === 'pending') { cls = 'current'; }
+    const name = getUserName(a.id).split(' ')[0];
+    const arrow = i < doc.approvers.length - 1 ? '<span class="progress-arrow">›</span>' : '';
+    return `<div class="progress-step"><div class="progress-dot ${cls}">${lbl}</div><div class="progress-name">${name}</div></div>${arrow}`;
+  }).join('') + '</div>';
+}
+
+// ── TABLES ──
+function statusBadge(s) {
+  return `<span class="status-badge status-${s}">${{pending:'Pending',approved:'Approved',rejected:'Rejected',draft:'Draft'}[s]||s}</span>`;
+}
+function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}); }
+function getUserName(id) { const u = users.find(u=>u.id===id); return u ? u.name : id; }
+
+function renderTable(tbodyId, data, mode) {
+  const tb = document.getElementById(tbodyId); if (!tb) return;
+  if (!data.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="9">No documents found.</td></tr>'; return; }
+  tb.innerHTML = [...data].sort((a,b)=>b.createdAt-a.createdAt).map(doc => {
+    const actions = buildActions(doc, mode);
+    const prog = progressHtml(doc);
+    if (mode === 'pending') {
+      const myStep = (doc.approvers||[]).findIndex(a => a.id === currentUser.id);
+      return `<tr>
+        <td>${doc.docNo}</td><td>${doc.title}</td><td>${doc.type}</td>
+        <td>${getUserName(doc.requesterId)}</td>
+        <td><span class="status-badge status-${doc.priority==='Urgent'?'rejected':doc.priority==='High'?'pending':'draft'}">${doc.priority}</span></td>
+        <td>Step ${myStep+1} / ${doc.approvers.length}</td>
+        <td>${fmtDate(doc.createdAt)}</td>
+        <td style="white-space:nowrap">${actions}</td>
+      </tr>`;
+    }
+    return `<tr>
+      <td>${doc.docNo}</td><td>${doc.title}</td><td>${doc.type}</td>
+      <td>${getUserName(doc.requesterId)}</td>
+      <td>${prog}</td>
+      <td>${fmtDate(doc.createdAt)}</td>
+      <td>${statusBadge(doc.status)}</td>
+      <td style="white-space:nowrap">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+function buildActions(doc, mode) {
+  let b = `<button class="btn-sm btn-sm-accent" onclick="viewDoc('${doc.id}')">View</button> `;
+  if (mode === 'pending' && isMyTurn(doc)) {
+    b += `<button class="btn-sm" style="background:var(--green);color:white;margin-right:2px" onclick="openApprove('${doc.id}','approve')">Approve</button>`;
+    b += `<button class="btn-sm" style="background:var(--red);color:white" onclick="openApprove('${doc.id}','reject')">Reject</button>`;
+  }
+  if (mode === 'mine' && doc.status === 'draft') {
+    b += `<button class="btn-sm btn-sm-outline" onclick="deleteDoc('${doc.id}')">Delete</button>`;
+  }
+  return b;
+}
+
+function filterTable(id, q) {
+  document.getElementById(id).querySelectorAll('tr:not(.empty-row)').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+
+// ── APPROVER LINE ──
+function buildApproverLine() {
+  approverRows = [];
+  document.getElementById('approverLine').innerHTML = '';
+  addApproverRow();
+}
+
+function getApproverOptions(selectedId) {
+  return users.filter(u => u.id !== currentUser.id).map(u =>
+    `<option value="${u.id}" ${u.id===selectedId?'selected':''}>${u.name} (${u.role})</option>`
+  ).join('');
+}
+
+function addApproverRow() {
+  const idx = approverRows.length;
+  approverRows.push('');
+  const row = document.createElement('div');
+  row.className = 'approver-row'; row.id = 'ar-' + idx;
+  row.innerHTML = `<span class="approver-step-num">${idx+1}</span>
+    <select class="field-input" style="margin-bottom:0" onchange="approverRows[${idx}]=this.value">
+      <option value="">— Select Approver —</option>${getApproverOptions('')}
+    </select>
+    ${idx > 0 ? `<button class="btn-remove-approver" onclick="removeApproverRow(${idx})">✕</button>` : ''}`;
+  document.getElementById('approverLine').appendChild(row);
+}
+
+function removeApproverRow(idx) {
+  approverRows.splice(idx, 1);
+  const saved = [...approverRows];
+  approverRows = [];
+  const line = document.getElementById('approverLine');
+  line.innerHTML = '';
+  saved.forEach((val, i) => {
+    const ni = approverRows.length;
+    approverRows.push(val);
+    const row = document.createElement('div');
+    row.className = 'approver-row'; row.id = 'ar-' + ni;
+    row.innerHTML = `<span class="approver-step-num">${ni+1}</span>
+      <select class="field-input" style="margin-bottom:0" onchange="approverRows[${ni}]=this.value">
+        <option value="">— Select Approver —</option>${getApproverOptions(val)}
+      </select>
+      ${ni > 0 ? `<button class="btn-remove-approver" onclick="removeApproverRow(${ni})">✕</button>` : ''}`;
+    line.appendChild(row);
+  });
+}
+
+// ── FILE SIZE CHECK ──
+function checkFileSize(input) {
+  const warning = document.getElementById('fileSizeWarning');
+  const ok = document.getElementById('fileSizeOk');
+  warning.style.display = 'none';
+  ok.style.display = 'none';
+
+  const files = Array.from(input.files);
+  if (!files.length) return;
+
+  const MAX_PER_FILE = 3 * 1024 * 1024;   // 3MB per file
+  const MAX_TOTAL    = 5 * 1024 * 1024;   // 5MB total
+
+  let errors = [];
+  let totalSize = 0;
+
+  files.forEach(f => {
+    totalSize += f.size;
+    if (f.size > MAX_PER_FILE) {
+      errors.push(`⚠ "${f.name}" (${(f.size/1024/1024).toFixed(1)}MB) — 파일당 최대 3MB를 초과했습니다.`);
+    }
+  });
+
+  if (totalSize > MAX_TOTAL) {
+    errors.push(`⚠ 전체 파일 합계 ${(totalSize/1024/1024).toFixed(1)}MB — 총 5MB를 초과했습니다.`);
+  }
+
+  if (errors.length > 0) {
+    warning.innerHTML = errors.join('<br>') + '<br><strong>해당 파일을 제거하고 다시 선택해 주세요.</strong>';
+    warning.style.display = 'block';
+    input.value = ''; // 파일 선택 초기화
+  } else {
+    const totalMB = (totalSize/1024/1024).toFixed(2);
+    ok.innerHTML = `✓ ${files.length}개 파일 선택됨 — 전체 ${totalMB}MB (정상)`;
+    ok.style.display = 'block';
+  }
+}
+
+// ── SUBMIT ──
+function submitDoc(status) {
+  const type = document.getElementById('docType').value;
+  const title = document.getElementById('docTitle').value.trim();
+  const content = document.getElementById('docContent').value.trim();
+  const priority = document.getElementById('docPriority').value;
+  const selApprovers = approverRows.filter(id => id);
+
+  if (status === 'pending') {
+    if (!type || !title || !content) { alert('Please fill in all required fields.'); return; }
+    if (!selApprovers.length) { alert('Please add at least one approver.'); return; }
+    if (new Set(selApprovers).size !== selApprovers.length) { alert('Duplicate approvers found. Each approver must be unique.'); return; }
+  } else {
+    if (!title) { alert('Please enter a title.'); return; }
+  }
+
+  docCounter++;
+  const docNo = 'RSI-' + String(docCounter).padStart(4,'0');
+  const files = document.getElementById('docFile').files;
+  const attachments = [];
+  let pending = files.length;
+
+  const finish = () => {
+    const approversData = selApprovers.map(id => ({ id, status:'pending', comment:'', at:null }));
+    const doc = {
+      id: 'doc_' + Date.now(), docNo, type, title,
+      approvers: approversData,
+      approverId: selApprovers[0] || '',
+      requesterId: currentUser.id, content, priority, status,
+      currentStep: 0, createdAt: Date.now(),
+      history: [{ action: status==='draft'?'draft':'submitted', by: currentUser.id, at: Date.now(), comment:'' }],
+      attachments
+    };
+    docs.push(doc); saveData();
+    // reset
+    ['docType','docTitle','docContent'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('docPriority').value = 'Normal';
+    document.getElementById('docFile').value = '';
+    buildApproverLine();
+
+    if (status === 'pending' && approversData.length > 0) sendEmail(approversData[0].id, doc, 'submitted', '');
+    refreshAll();
+    alert(status==='draft' ? '✓ Saved as draft.' : '✓ Submitted! Email sent to first approver.');
+    showPage('mine');
+  };
+
+  if (!pending) { finish(); return; }
+  Array.from(files).forEach(file => {
+    if (file.size > 3*1024*1024) { alert(`"${file.name}" 파일이 3MB를 초과합니다. 첨부가 취소됐습니다.`); pending--; if(!pending) finish(); return; }
+    const reader = new FileReader();
+    reader.onload = e => { attachments.push({name:file.name,data:e.target.result,size:file.size}); pending--; if(!pending) finish(); };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── VIEW ──
+function viewDoc(docId) {
+  const doc = docs.find(d=>d.id===docId); if (!doc) return;
+  currentDocId = docId;
+  document.getElementById('modalTitle').textContent = doc.docNo + ' — ' + doc.title;
+
+  const fileHtml = doc.attachments && doc.attachments.length
+    ? doc.attachments.map(f => {
+        if (f.data && f.data.length > 10) {
+          return `<div class="file-item">
+            📎 <span style="color:var(--light)">${f.name}</span>
+            <span style="color:var(--mid)">(${(f.size/1024).toFixed(1)} KB)</span>
+            <button class="btn-sm btn-sm-accent" style="margin-left:8px" onclick="downloadFile('${doc.id}','${f.name}')">⬇ Download</button>
+          </div>`;
+        } else {
+          return `<div class="file-item">📎 <span style="color:var(--mid)">${f.name} (파일 데이터 없음 — 용량 초과)</span></div>`;
+        }
+      }).join('')
+    : '<span style="color:var(--mid);font-size:0.85rem;">No attachments</span>';
+
+  const historyHtml = doc.history.map(h => {
+    const cls = h.action==='approved'?'h-approved':h.action==='rejected'?'h-rejected':h.action==='submitted'?'h-pending':'h-draft';
+    return `<div class="history-item"><div class="history-dot ${cls}"></div><div>
+      <div class="history-text"><strong>${getUserName(h.by)}</strong> — ${h.action.toUpperCase()}${h.comment?': "'+h.comment+'"':''}</div>
+      <div class="history-time">${fmtDate(h.at)}</div>
+    </div></div>`;
+  }).join('');
+
+  const approverDetail = (doc.approvers||[]).map((a,i) =>
+    `<div style="font-size:0.82rem;color:var(--light);display:flex;gap:1rem;align-items:center;padding:0.3rem 0;flex-wrap:wrap;">
+      <span style="color:var(--accent);min-width:55px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">STEP ${i+1}</span>
+      <span>${getUserName(a.id)}</span>
+      <span class="status-badge status-${a.status}">${a.status}</span>
+      ${a.comment?`<span style="color:var(--mid);font-style:italic">"${a.comment}"</span>`:''}
+    </div>`
+  ).join('');
+
+  document.getElementById('modalBody').innerHTML = `
+    <div class="detail-row"><div class="detail-label">Doc No.</div><div class="detail-value">${doc.docNo}</div></div>
+    <div class="detail-row"><div class="detail-label">Status</div><div class="detail-value">${statusBadge(doc.status)}</div></div>
+    <div class="detail-row"><div class="detail-label">Type</div><div class="detail-value">${doc.type}</div></div>
+    <div class="detail-row"><div class="detail-label">Priority</div><div class="detail-value">${doc.priority}</div></div>
+    <div class="detail-row"><div class="detail-label">Requester</div><div class="detail-value">${getUserName(doc.requesterId)}</div></div>
+    <div class="detail-row" style="flex-direction:column;gap:0.8rem;">
+      <div class="detail-label">Approval Line (순차 결재)</div>
+      ${progressHtml(doc)}
+      ${approverDetail}
+    </div>
+    <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDate(doc.createdAt)}</div></div>
+    <div class="detail-row" style="flex-direction:column;gap:0.5rem;">
+      <div class="detail-label">Content</div>
+      <div class="detail-value" style="line-height:1.8;white-space:pre-wrap;">${(doc.content||'').replace(/\n/g,'<br>') || '<span style="color:var(--mid)">No content</span>'}</div>
+    </div>
+    <div class="detail-row" style="flex-direction:column;gap:0.5rem;">
+      <div class="detail-label">Attachments</div><div>${fileHtml}</div>
+    </div>
+    <div style="margin-top:1.5rem;">
+      <div class="detail-label" style="margin-bottom:0.8rem;">History</div>
+      ${historyHtml}
+    </div>`;
+
+  let footer = '<button class="btn btn-outline" onclick="closeModal(\'detailModal\')">Close</button>';
+  if (isMyTurn(doc)) {
+    footer = `<button class="btn btn-outline" onclick="closeModal('detailModal')">Close</button>
+      <button class="btn btn-green" onclick="closeModal('detailModal');openApprove('${doc.id}','approve')">Approve</button>
+      <button class="btn btn-red" onclick="closeModal('detailModal');openApprove('${doc.id}','reject')">Reject</button>`;
+  }
+  document.getElementById('modalFooter').innerHTML = footer;
+  document.getElementById('detailModal').classList.add('open');
+}
+
+// ── DOWNLOAD FILE ──
+function downloadFile(docId, fileName) {
+  const doc = docs.find(d => d.id === docId);
+  if (!doc) return;
+  const file = doc.attachments.find(f => f.name === fileName);
+  if (!file || !file.data) { alert('File data not available.'); return; }
+  const a = document.createElement('a');
+  a.href = file.data;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// ── APPROVE / REJECT ──
+function openApprove(docId, action) {
+  currentDocId = docId;
+  document.getElementById('approveModalTitle').textContent = action==='approve' ? '✓ Approve Document' : '✕ Reject Document';
+  document.getElementById('approveComment').value = '';
+  document.getElementById('approveFooter').innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal('approveModal')">Cancel</button>
+    <button class="btn ${action==='approve'?'btn-green':'btn-red'}" onclick="doApprove('${action}')">
+      ${action==='approve'?'Confirm Approve':'Confirm Reject'} →
+    </button>`;
+  document.getElementById('approveModal').classList.add('open');
+}
+
+async function doApprove(action) {
+  const doc = docs.find(d=>d.id===currentDocId); if (!doc) return;
+  const comment = document.getElementById('approveComment').value.trim();
+  const step = doc.currentStep || 0;
+
+  doc.approvers[step].status = action === 'approve' ? 'approved' : 'rejected';
+  doc.approvers[step].comment = comment;
+  doc.approvers[step].at = Date.now();
+  doc.history.push({ action: action==='approve'?'approved':'rejected', by: currentUser.id, at: Date.now(), comment });
+
+  if (action === 'reject') {
+    doc.status = 'rejected';
+    sendEmail(doc.requesterId, doc, 'rejected', comment);
+  } else {
+    const next = step + 1;
+    if (next >= doc.approvers.length) {
+      // 전체 결재 완료
+      doc.status = 'approved';
+      sendEmail(doc.requesterId, doc, 'approved', comment);
+    } else {
+      // 다음 결재자로 전달
+      doc.currentStep = next;
+      doc.approvers[next].status = 'pending';
+      sendEmail(doc.approvers[next].id, doc, 'step_approved', '');
+      sendEmail(doc.requesterId, doc, 'step_approved', comment);
+    }
+  }
+
+  saveData(); closeModal('approveModal'); refreshAll(); refreshPage('pending');
+  if (action === 'approve' && doc.status === 'approved') alert('✓ All steps approved! Document fully approved.');
+  else if (action === 'approve') alert(`✓ Step ${step+1} approved. Forwarded to Step ${step+2}.`);
+  else alert('✕ Document rejected.');
+}
+
+function deleteDoc(docId) {
+  if (!confirm('Delete this document?')) return;
+  docs = docs.filter(d=>d.id!==docId); saveData(); refreshAll(); refreshPage('mine');
+}
+
+// ── USERS ──
+function renderUsers() {
+  const isAdmin = currentUser.role === 'Admin';
+  // Add User 버튼 Admin만 표시
+  const addBtn = document.getElementById('addUserBtn');
+  if (addBtn) addBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+  document.getElementById('userList').innerHTML = users.map(u => `
+    <div class="user-card">
+      <div class="user-avatar">${u.name.charAt(0)}</div>
+      <div class="user-info">
+        <div class="user-name">${u.name}</div>
+        <div class="user-role">${u.role} · ${u.id}${u.email?' · '+u.email:' · <span style="color:var(--red)">No email</span>'}</div>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        ${u.id === currentUser.id
+          ? `<span style="font-size:0.75rem;color:var(--accent)">YOU</span>
+             <button class="btn-sm btn-sm-accent" onclick="openEditUser('${u.id}')">Edit</button>`
+          : isAdmin
+            ? `<button class="btn-sm btn-sm-accent" onclick="openEditUser('${u.id}')">Edit</button>
+               <button class="btn-sm btn-sm-outline" onclick="removeUser('${u.id}')">Remove</button>`
+            : ''
+        }
+      </div>
+    </div>`).join('');
+}
+
+function openEditUser(id) {
+  const u = users.find(u=>u.id===id); if (!u) return;
+  document.getElementById('editUserId').value = u.id;
+  document.getElementById('editUserName').value = u.name;
+  document.getElementById('editUserEmail').value = u.email || '';
+  document.getElementById('editUserPw').value = '';
+  document.getElementById('editUserRole').value = u.role;
+  document.getElementById('editUserModal').classList.add('open');
+}
+
+function saveEditUser() {
+  const id = document.getElementById('editUserId').value;
+  const name = document.getElementById('editUserName').value.trim();
+  const email = document.getElementById('editUserEmail').value.trim();
+  const pw = document.getElementById('editUserPw').value;
+  const role = document.getElementById('editUserRole').value;
+  if (!name) { alert('Please enter a name.'); return; }
+  const u = users.find(u=>u.id===id); if (!u) return;
+  u.name = name; u.email = email; u.role = role;
+  if (pw) u.pw = pw;
+  saveData();
+  if (id === currentUser.id) {
+    currentUser.name = name; currentUser.role = role;
+    document.getElementById('topbarUser').textContent = name+' ('+role+')';
+  }
+  closeModal('editUserModal'); renderUsers(); alert('✓ User updated!');
+}
+
+function openAddUser() { document.getElementById('userModal').classList.add('open'); }
+
+function addUser() {
+  const name = document.getElementById('newUserName').value.trim();
+  const id = document.getElementById('newUserId').value.trim();
+  const email = document.getElementById('newUserEmail').value.trim();
+  const pw = document.getElementById('newUserPw').value;
+  const role = document.getElementById('newUserRole').value;
+  if (!name || !id || !pw) { alert('Please fill in required fields.'); return; }
+  if (users.find(u=>u.id===id)) { alert('User ID already exists.'); return; }
+  users.push({ id, name, pw, role, email });
+  saveData(); closeModal('userModal'); renderUsers();
+  ['newUserName','newUserId','newUserEmail','newUserPw'].forEach(i => document.getElementById(i).value='');
+}
+
+function removeUser(id) {
+  if (!confirm('Remove this user?')) return;
+  users = users.filter(u=>u.id!==id); saveData(); renderUsers();
+}
+
+// ── SETTINGS ──
+function loadEmailSettings() {
+  document.getElementById('ejsPublicKey').value = emailCfg.publicKey || '';
+  document.getElementById('ejsServiceId').value = emailCfg.serviceId || '';
+  document.getElementById('ejsTemplateId').value = emailCfg.templateId || '';
+}
+
+function saveEmailSettings() {
+  emailCfg.publicKey  = document.getElementById('ejsPublicKey').value.trim();
+  emailCfg.serviceId  = document.getElementById('ejsServiceId').value.trim();
+  emailCfg.templateId = document.getElementById('ejsTemplateId').value.trim();
+  saveEmailCfg();
+  if (emailCfg.publicKey) { try { emailjs.init(emailCfg.publicKey); } catch(e){} }
+  const s = document.getElementById('emailSettingStatus');
+  s.textContent = '✓ Saved!'; s.style.color = 'var(--green)';
+  setTimeout(() => s.textContent = '', 3000);
+}
+
+async function testEmail() {
+  if (!emailCfg.publicKey) { alert('Please save EmailJS settings first.'); return; }
+  const me = users.find(u=>u.id===currentUser.id);
+  if (!me || !me.email) { alert('Please set your email address in Users page first.'); return; }
+  const s = document.getElementById('emailSettingStatus');
+  s.textContent = 'Sending...'; s.style.color = 'var(--accent)';
+  try {
+    await emailjs.send(emailCfg.serviceId, emailCfg.templateId, {
+      to_email: me.email, to_name: me.name,
+      doc_no: 'RSI-TEST', doc_title: 'Test Email Notification',
+      doc_type: 'Test', requester: me.name,
+      action: 'This is a test email from Route System Approval System',
+      comment: '—', priority: 'Normal'
+    });
+    s.textContent = '✓ Test email sent!'; s.style.color = 'var(--green)';
+  } catch(e) {
+    s.textContent = '✕ Failed: ' + (e.text || e.message || JSON.stringify(e));
+    s.style.color = 'var(--red)';
+  }
+}
+
+// ── MODAL ──
+function closeModal(id) { document.getElementById
