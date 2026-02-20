@@ -279,11 +279,16 @@
           <textarea class="field-input" id="docContent" placeholder="Describe the purpose and details..."></textarea>
         </div>
         <div class="form-group">
-          <label class="field-label">Attach File</label>
-          <input class="field-input" type="file" id="docFile" multiple style="padding:8px 14px;cursor:pointer;" onchange="checkFileSize(this)"/>
-          <div style="font-size:0.75rem;color:var(--mid);margin-top:0.3rem;">파일당 최대 3MB / 전체 합계 5MB 이하 (Max 3MB per file / 5MB total)</div>
-          <div id="fileSizeWarning" style="display:none;margin-top:0.5rem;background:rgba(192,57,43,0.15);border:1px solid var(--red);color:#e74c3c;padding:10px 14px;font-size:0.85rem;"></div>
-          <div id="fileSizeOk" style="display:none;margin-top:0.5rem;background:rgba(74,158,107,0.15);border:1px solid var(--green);color:var(--green);padding:10px 14px;font-size:0.85rem;"></div>
+          <label class="field-label">📎 OneDrive 첨부 링크</label>
+          <div id="onedriveLinkList" style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.5rem;"></div>
+          <div style="display:flex;gap:0.5rem;">
+            <input class="field-input" type="text" id="onedriveLinkInput" placeholder="OneDrive 공유 링크를 붙여넣기 하세요..." style="flex:1;"/>
+            <input class="field-input" type="text" id="onedriveNameInput" placeholder="파일명 (예: 견적서.xlsx)" style="flex:1;"/>
+            <button class="btn btn-outline" onclick="addOnedriveLink()" style="white-space:nowrap;">+ 추가</button>
+          </div>
+          <div style="font-size:0.75rem;color:var(--mid);margin-top:0.4rem;">
+            OneDrive에서 파일 공유 링크 복사 후 붙여넣기 하세요.
+          </div>
         </div>
         <div style="display:flex;gap:1rem;margin-top:0.5rem;">
           <button class="btn btn-gold" onclick="submitDoc('pending')">Submit for Approval →</button>
@@ -525,6 +530,35 @@ let emailCfg = JSON.parse(localStorage.getItem('rs_email') || 'null') || {
   templateId: EMAIL_TEMPLATE_ID
 };
 let approverRows = [];
+let onedriveLinks = []; // OneDrive 첨부 링크 목록
+
+function addOnedriveLink() {
+  const url = document.getElementById('onedriveLinkInput').value.trim();
+  const name = document.getElementById('onedriveNameInput').value.trim();
+  if (!url) { alert('링크를 입력해 주세요.'); return; }
+  if (!url.startsWith('http')) { alert('올바른 링크를 입력해 주세요.'); return; }
+  const linkName = name || '첨부파일 ' + (onedriveLinks.length + 1);
+  onedriveLinks.push({ name: linkName, url });
+  document.getElementById('onedriveLinkInput').value = '';
+  document.getElementById('onedriveNameInput').value = '';
+  renderOnedriveLinkList();
+}
+
+function renderOnedriveLinkList() {
+  const list = document.getElementById('onedriveLinkList');
+  if (!list) return;
+  list.innerHTML = onedriveLinks.map((l, i) => `
+    <div style="display:flex;align-items:center;gap:0.5rem;background:var(--dark2);border:1px solid var(--gray);padding:8px 12px;border-radius:6px;">
+      <span style="font-size:0.85rem;color:var(--accent);">📄</span>
+      <a href="${l.url}" target="_blank" style="color:var(--light);font-size:0.85rem;flex:1;text-decoration:none;">${l.name}</a>
+      <button onclick="removeOnedriveLink(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.85rem;">✕</button>
+    </div>`).join('');
+}
+
+function removeOnedriveLink(i) {
+  onedriveLinks.splice(i, 1);
+  renderOnedriveLinkList();
+}
 
 function saveData() {
   // Firebase에 저장 (localStorage 사용 안 함)
@@ -806,41 +840,27 @@ function submitDoc(status) {
 
   docCounter++;
   const docNo = 'RSI-' + String(docCounter).padStart(4,'0');
-  const files = document.getElementById('docFile').files;
-  const attachments = [];
-  let pending = files.length;
-
-  const finish = () => {
-    const approversData = selApprovers.map(id => ({ id, status:'pending', comment:'', at:null }));
-    const docData = {
-      id: 'doc_' + Date.now(), docNo, type, title,
-      approvers: approversData,
-      approverId: selApprovers[0] || '',
-      requesterId: currentUser.id, content, priority, status,
-      currentStep: 0, createdAt: Date.now(),
-      history: [{ action: status==='draft'?'draft':'submitted', by: currentUser.id, at: Date.now(), comment:'' }],
-      attachments
-    };
-    saveDoc(docData).then(() => {
-      saveData();
-      ['docType','docTitle','docContent'].forEach(id => document.getElementById(id).value = '');
-      document.getElementById('docPriority').value = 'Normal';
-      document.getElementById('docFile').value = '';
-      document.getElementById('fileSizeWarning').style.display = 'none';
-      document.getElementById('fileSizeOk').style.display = 'none';
-      buildApproverLine();
-      if (status === 'pending' && approversData.length > 0) sendEmail(approversData[0].id, docData, 'submitted', '');
-      alert(status==='draft' ? '✓ Saved as draft.' : '✓ Submitted! Email sent to first approver.');
-      showPage('mine');
-    });
+  const approversData = selApprovers.map(id => ({ id, status:'pending', comment:'', at:null }));
+  const docData = {
+    id: 'doc_' + Date.now(), docNo, type, title,
+    approvers: approversData,
+    approverId: selApprovers[0] || '',
+    requesterId: currentUser.id, content, priority, status,
+    currentStep: 0, createdAt: Date.now(),
+    history: [{ action: status==='draft'?'draft':'submitted', by: currentUser.id, at: Date.now(), comment:'' }],
+    attachments: [...onedriveLinks]
   };
 
-  if (!pending) { finish(); return; }
-  Array.from(files).forEach(file => {
-    if (file.size > 3*1024*1024) { alert(`"${file.name}" 파일이 3MB를 초과합니다. 첨부가 취소됐습니다.`); pending--; if(!pending) finish(); return; }
-    const reader = new FileReader();
-    reader.onload = e => { attachments.push({name:file.name,data:e.target.result,size:file.size}); pending--; if(!pending) finish(); };
-    reader.readAsDataURL(file);
+  saveDoc(docData).then(() => {
+    saveData();
+    ['docType','docTitle','docContent'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('docPriority').value = 'Normal';
+    onedriveLinks = [];
+    renderOnedriveLinkList();
+    buildApproverLine();
+    if (status === 'pending' && approversData.length > 0) sendEmail(approversData[0].id, docData, 'submitted', '');
+    alert(status==='draft' ? '✓ Saved as draft.' : '✓ Submitted! Email sent to first approver.');
+    showPage('mine');
   });
 }
 
@@ -852,14 +872,20 @@ function viewDoc(docId) {
 
   const fileHtml = doc.attachments && doc.attachments.length
     ? doc.attachments.map(f => {
-        if (f.data && f.data.length > 10) {
+        if (f.url) {
+          // OneDrive 링크
+          return `<div class="file-item">
+            📄 <a href="${f.url}" target="_blank" style="color:var(--accent);font-size:0.85rem;">${f.name}</a>
+            <span style="color:var(--mid);font-size:0.75rem;margin-left:8px">OneDrive</span>
+          </div>`;
+        } else if (f.data && f.data.length > 10) {
           return `<div class="file-item">
             📎 <span style="color:var(--light)">${f.name}</span>
             <span style="color:var(--mid)">(${(f.size/1024).toFixed(1)} KB)</span>
             <button class="btn-sm btn-sm-accent" style="margin-left:8px" onclick="downloadFile('${doc.id}','${f.name}')">⬇ Download</button>
           </div>`;
         } else {
-          return `<div class="file-item">📎 <span style="color:var(--mid)">${f.name} (파일 데이터 없음 — 용량 초과)</span></div>`;
+          return `<div class="file-item">📎 <span style="color:var(--mid)">${f.name} (파일 데이터 없음)</span></div>`;
         }
       }).join('')
     : '<span style="color:var(--mid);font-size:0.85rem;">No attachments</span>';
