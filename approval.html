@@ -565,8 +565,8 @@ window.addEventListener('load', function() {
 // EmailJS 설정 (코드에 직접 입력 — 변경 시 여기를 수정하세요)
 const EMAIL_PUBLIC_KEY  = 'UeNmq8x-Jq_IcPeHG';
 const EMAIL_SERVICE_ID  = 'service_mk3827x';
-const EMAIL_TEMPLATE_ID = 'template_6yqfkkb';
-let emailCfg = JSON.parse(localStorage.getItem('rs_email') || 'null') || {
+const EMAIL_TEMPLATE_ID = 'template_mst85o1';
+let emailCfg = JSON.parse(localStorage.getItem('rs_email_v3') || 'null') || {
   publicKey:  EMAIL_PUBLIC_KEY,
   serviceId:  EMAIL_SERVICE_ID,
   templateId: EMAIL_TEMPLATE_ID
@@ -621,7 +621,7 @@ async function saveDoc(docData) {
 async function removeDoc(docId) {
   await db.collection('documents').doc(docId).delete();
 }
-function saveEmailCfg() { localStorage.setItem('rs_email', JSON.stringify(emailCfg)); }
+function saveEmailCfg() { localStorage.setItem('rs_email_v3', JSON.stringify(emailCfg)); }
 
 // EmailJS init
 if (emailCfg.publicKey) { try { emailjs.init(emailCfg.publicKey); } catch(e){} }
@@ -643,8 +643,7 @@ async function sendEmail(toId, doc, action, comment) {
       doc_no: doc.docNo, doc_title: doc.title, doc_type: doc.type,
       requester: requester ? requester.name : doc.requesterId,
       action: actionLabels[action] || action,
-      comment: comment || '—', priority: doc.priority,
-      login_url: 'https://routesystemus.com/approval.html'
+      comment: comment || '—', priority: doc.priority
     });
   } catch(e) { console.warn('Email failed:', e); }
 }
@@ -974,10 +973,6 @@ function submitDoc(status) {
     buildApproverLine();
     buildCcLine();
     if (status === 'pending' && approversData.length > 0) sendEmail(approversData[0].id, docData, 'submitted', '');
-    // 참조자에게도 알림 발송
-    if (status === 'pending' && selCc.length > 0) {
-      selCc.forEach(ccId => sendEmail(ccId, docData, 'submitted', ''));
-    }
     alert(status==='draft' ? '✓ Saved as draft.' : '✓ Submitted! Email sent to first approver.');
     showPage('mine');
   });
@@ -1103,16 +1098,12 @@ async function doApprove(action) {
   if (action === 'reject') {
     doc.status = 'rejected';
     sendEmail(doc.requesterId, doc, 'rejected', comment);
-    // 참조자에게도 반려 알림
-    if (doc.cc && doc.cc.length) doc.cc.forEach(ccId => sendEmail(ccId, doc, 'rejected', comment));
   } else {
     const next = step + 1;
     if (next >= doc.approvers.length) {
       // 전체 결재 완료
       doc.status = 'approved';
       sendEmail(doc.requesterId, doc, 'approved', comment);
-      // 참조자에게도 승인 알림
-      if (doc.cc && doc.cc.length) doc.cc.forEach(ccId => sendEmail(ccId, doc, 'approved', comment));
     } else {
       // 다음 결재자로 전달
       doc.currentStep = next;
@@ -1266,8 +1257,7 @@ async function testEmail() {
       doc_no: 'RSI-TEST', doc_title: 'Test Email Notification',
       doc_type: 'Test', requester: me.name,
       action: 'This is a test email from Route System Approval System',
-      comment: '—', priority: 'Normal',
-      login_url: 'https://routesystemus.com/approval.html'
+      comment: '—', priority: 'Normal'
     });
     s.textContent = '✓ Test email sent!'; s.style.color = 'var(--green)';
   } catch(e) {
