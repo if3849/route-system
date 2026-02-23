@@ -276,6 +276,12 @@
           <button class="btn-add-approver" onclick="addApproverRow()">+ 결재자 추가 / Add Approver</button>
         </div>
         <div class="form-group">
+          <label class="field-label">CC / 참조자 — 문서 열람 가능</label>
+          <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">참조자는 결재 권한 없이 문서를 열람만 할 수 있습니다.</div>
+          <div id="ccLine"></div>
+          <button class="btn-add-approver" onclick="addCcRow()">+ 참조자 추가 / Add CC</button>
+        </div>
+        <div class="form-group">
           <label class="field-label">Content / Details</label>
           <textarea class="field-input" id="docContent" placeholder="Describe the purpose and details..."></textarea>
         </div>
@@ -331,7 +337,7 @@
     <div class="page" id="page-all">
       <div class="page-header">
         <div><div class="page-title-tag">Archive</div><div class="page-title">ALL DOCUMENTS</div></div>
-        <button class="btn btn-gold" onclick="exportToExcel()">📥 Export Excel</button>
+        <button class="btn btn-gold" id="exportExcelBtn" onclick="exportToExcel()" style="display:none">📥 Export Excel</button>
       </div>
       <div class="table-wrap">
         <div class="table-toolbar">
@@ -566,6 +572,7 @@ let emailCfg = JSON.parse(localStorage.getItem('rs_email') || 'null') || {
   templateId: EMAIL_TEMPLATE_ID
 };
 let approverRows = [];
+let ccRows = []; // 참조자 목록
 let onedriveLinks = []; // OneDrive 첨부 링크 목록
 
 function addOnedriveLink() {
@@ -651,8 +658,10 @@ function doLogin() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('topbarUser').textContent = user.name + ' (' + user.role + ')';
-  // Staff는 Settings 메뉴 숨김
-  document.getElementById('nav-settings').style.display = user.role === 'Admin' ? 'flex' : 'none';
+  // Staff는 Settings 메뉴 숨김 (Admin, Manager만 표시)
+  document.getElementById('nav-settings').style.display = (user.role === 'Admin' || user.role === 'Manager') ? 'flex' : 'none';
+  // Excel Export는 Admin만
+  document.getElementById('exportExcelBtn').style.display = user.role === 'Admin' ? 'inline-flex' : 'none';
   refreshAll(); showPage('dashboard');
 }
 function doLogout() {
@@ -666,8 +675,8 @@ function doLogout() {
 
 // ── NAVIGATION ──
 function showPage(name) {
-  // Staff는 Settings 접근 불가
-  if (name === 'settings' && currentUser.role !== 'Admin') {
+  // Staff는 Settings 접근 불가 (Admin, Manager만 가능)
+  if (name === 'settings' && currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
     alert('관리자만 접근 가능합니다.'); return;
   }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -691,23 +700,42 @@ function refreshAll() {
   badge.textContent = cnt; badge.style.display = cnt > 0 ? 'inline-block' : 'none';
 }
 
+// ── 문서 열람 권한 체크 ──
+function canViewDoc(doc) {
+  // Admin은 모든 문서 열람 가능
+  if (currentUser.role === 'Admin') return true;
+  // 작성자
+  if (doc.requesterId === currentUser.id) return true;
+  // 결재자
+  if ((doc.approvers || []).some(a => a.id === currentUser.id)) return true;
+  // 참조자
+  if ((doc.cc || []).some(c => c === currentUser.id)) return true;
+  return false;
+}
+
+function getVisibleDocs() {
+  return docs.filter(d => canViewDoc(d));
+}
+
 function refreshPage(name) {
+  const visible = getVisibleDocs();
   if (name === 'dashboard') renderDashboard();
-  if (name === 'mine') renderTable('mineTable', docs.filter(d => d.requesterId === currentUser.id), 'mine');
-  if (name === 'pending') renderTable('pendingTable', docs.filter(d => isMyTurn(d)), 'pending');
-  if (name === 'all') renderTable('allTable', docs, 'all');
+  if (name === 'mine') renderTable('mineTable', visible.filter(d => d.requesterId === currentUser.id), 'mine');
+  if (name === 'pending') renderTable('pendingTable', visible.filter(d => isMyTurn(d)), 'pending');
+  if (name === 'all') renderTable('allTable', visible, 'all');
   if (name === 'users') renderUsers();
-  if (name === 'new') { buildApproverLine(); }
+  if (name === 'new') { buildApproverLine(); buildCcLine(); }
   if (name === 'settings') loadEmailSettings();
 }
 
 // ── DASHBOARD ──
 function renderDashboard() {
-  document.getElementById('stat-total').textContent = docs.length;
-  document.getElementById('stat-pending').textContent = docs.filter(d => d.status === 'pending').length;
-  document.getElementById('stat-approved').textContent = docs.filter(d => d.status === 'approved').length;
-  document.getElementById('stat-rejected').textContent = docs.filter(d => d.status === 'rejected').length;
-  renderTable('recentTable', [...docs].sort((a,b)=>b.createdAt-a.createdAt).slice(0,8), 'all');
+  const visible = getVisibleDocs();
+  document.getElementById('stat-total').textContent = visible.length;
+  document.getElementById('stat-pending').textContent = visible.filter(d => d.status === 'pending').length;
+  document.getElementById('stat-approved').textContent = visible.filter(d => d.status === 'approved').length;
+  document.getElementById('stat-rejected').textContent = visible.filter(d => d.status === 'rejected').length;
+  renderTable('recentTable', [...visible].sort((a,b)=>b.createdAt-a.createdAt).slice(0,8), 'all');
 }
 
 // ── PROGRESS ──
@@ -826,6 +854,44 @@ function removeApproverRow(idx) {
   });
 }
 
+// ── CC (참조자) LINE ──
+function buildCcLine() {
+  ccRows = [];
+  document.getElementById('ccLine').innerHTML = '';
+}
+
+function addCcRow() {
+  const idx = ccRows.length;
+  ccRows.push('');
+  const row = document.createElement('div');
+  row.className = 'approver-row'; row.id = 'cc-' + idx;
+  row.innerHTML = `<span class="approver-step-num" style="color:var(--mid)">CC</span>
+    <select class="field-input" style="margin-bottom:0" onchange="ccRows[${idx}]=this.value">
+      <option value="">— Select CC —</option>${getApproverOptions('')}
+    </select>
+    <button class="btn-remove-approver" onclick="removeCcRow(${idx})">✕</button>`;
+  document.getElementById('ccLine').appendChild(row);
+}
+
+function removeCcRow(idx) {
+  ccRows.splice(idx, 1);
+  const saved = [...ccRows];
+  ccRows = [];
+  const line = document.getElementById('ccLine');
+  line.innerHTML = '';
+  saved.forEach((val, i) => {
+    ccRows.push(val);
+    const row = document.createElement('div');
+    row.className = 'approver-row'; row.id = 'cc-' + i;
+    row.innerHTML = `<span class="approver-step-num" style="color:var(--mid)">CC</span>
+      <select class="field-input" style="margin-bottom:0" onchange="ccRows[${i}]=this.value">
+        <option value="">— Select CC —</option>${getApproverOptions(val)}
+      </select>
+      <button class="btn-remove-approver" onclick="removeCcRow(${i})">✕</button>`;
+    line.appendChild(row);
+  });
+}
+
 // ── FILE SIZE CHECK ──
 function checkFileSize(input) {
   const warning = document.getElementById('fileSizeWarning');
@@ -871,11 +937,15 @@ function submitDoc(status) {
   const content = document.getElementById('docContent').value.trim();
   const priority = document.getElementById('docPriority').value;
   const selApprovers = approverRows.filter(id => id);
+  const selCc = ccRows.filter(id => id);
 
   if (status === 'pending') {
     if (!type || !title || !content) { alert('Please fill in all required fields.'); return; }
     if (!selApprovers.length) { alert('Please add at least one approver.'); return; }
     if (new Set(selApprovers).size !== selApprovers.length) { alert('Duplicate approvers found. Each approver must be unique.'); return; }
+    // 결재자와 참조자 중복 체크
+    const overlap = selCc.filter(c => selApprovers.includes(c));
+    if (overlap.length) { alert('결재자와 참조자에 동일인이 있습니다. 확인해 주세요.'); return; }
   } else {
     if (!title) { alert('Please enter a title.'); return; }
   }
@@ -886,6 +956,7 @@ function submitDoc(status) {
   const docData = {
     id: 'doc_' + Date.now(), docNo, type, title,
     approvers: approversData,
+    cc: selCc, // 참조자 ID 배열
     approverId: selApprovers[0] || '',
     requesterId: currentUser.id, content, priority, status,
     currentStep: 0, createdAt: Date.now(),
@@ -900,6 +971,7 @@ function submitDoc(status) {
     onedriveLinks = [];
     renderOnedriveLinkList();
     buildApproverLine();
+    buildCcLine();
     if (status === 'pending' && approversData.length > 0) sendEmail(approversData[0].id, docData, 'submitted', '');
     alert(status==='draft' ? '✓ Saved as draft.' : '✓ Submitted! Email sent to first approver.');
     showPage('mine');
@@ -960,6 +1032,9 @@ function viewDoc(docId) {
       ${progressHtml(doc)}
       ${approverDetail}
     </div>
+    <div class="detail-row"><div class="detail-label">CC / 참조자</div><div class="detail-value">${
+      doc.cc && doc.cc.length ? doc.cc.map(id => getUserName(id)).join(', ') : '<span style="color:var(--mid)">없음</span>'
+    }</div></div>
     <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDate(doc.createdAt)}</div></div>
     <div class="detail-row" style="flex-direction:column;gap:0.5rem;">
       <div class="detail-label">Content</div>
@@ -1060,12 +1135,12 @@ async function deleteDoc(docId) {
 
 // ── USERS ──
 function renderUsers() {
-  const isAdmin = currentUser.role === 'Admin';
-  // Add User 버튼 Admin만 표시
+  const isAdminOrMgr = (currentUser.role === 'Admin' || currentUser.role === 'Manager');
+  // Add User 버튼 Admin/Manager만 표시
   const addBtn = document.getElementById('addUserBtn');
-  if (addBtn) addBtn.style.display = isAdmin ? 'inline-flex' : 'none';
-  // Staff는 본인만 표시, Admin은 전체 표시
-  const visibleUsers = isAdmin ? users : users.filter(u => u.id === currentUser.id);
+  if (addBtn) addBtn.style.display = isAdminOrMgr ? 'inline-flex' : 'none';
+  // Staff는 본인만 표시, Admin/Manager는 전체 표시
+  const visibleUsers = isAdminOrMgr ? users : users.filter(u => u.id === currentUser.id);
   document.getElementById('userList').innerHTML = visibleUsers.map(u => `
     <div class="user-card">
       <div class="user-avatar">${u.name.charAt(0)}</div>
@@ -1077,7 +1152,7 @@ function renderUsers() {
         ${u.id === currentUser.id
           ? `<span style="font-size:0.75rem;color:var(--accent)">YOU</span>
              <button class="btn-sm btn-sm-accent" onclick="openEditUser('${u.id}')">Edit</button>`
-          : isAdmin
+          : isAdminOrMgr
             ? `<button class="btn-sm btn-sm-accent" onclick="openEditUser('${u.id}')">Edit</button>
                <button class="btn-sm btn-sm-outline" onclick="removeUser('${u.id}')">Remove</button>`
             : ''
@@ -1087,8 +1162,9 @@ function renderUsers() {
 }
 
 function openEditUser(id) {
+  const isAdminOrMgr = (currentUser.role === 'Admin' || currentUser.role === 'Manager');
   // Staff는 본인만 수정 가능
-  if (currentUser.role !== 'Admin' && id !== currentUser.id) {
+  if (!isAdminOrMgr && id !== currentUser.id) {
     alert('본인 정보만 수정 가능합니다.'); return;
   }
   const u = users.find(u=>u.id===id); if (!u) return;
@@ -1099,7 +1175,7 @@ function openEditUser(id) {
   document.getElementById('editUserPwConfirm').value = '';
   document.getElementById('editUserRole').value = u.role;
   // Staff는 Role 변경 불가
-  document.getElementById('editUserRole').disabled = (currentUser.role !== 'Admin');
+  document.getElementById('editUserRole').disabled = !isAdminOrMgr;
   document.getElementById('editUserModal').classList.add('open');
 }
 
@@ -1205,6 +1281,7 @@ function exportToExcel() {
       return `Step${i+1}: ${name} (${status})`;
     }).join(' → ');
     const files = (d.files || []).map(f => f.name || f.url).join(', ');
+    const ccNames = (d.cc || []).map(id => getUserName(id)).join(', ');
     return {
       '문서번호': d.docNo || '',
       '제목': d.title || '',
@@ -1213,6 +1290,7 @@ function exportToExcel() {
       '요청자': requester ? requester.name : d.requesterId,
       '상태': d.status === 'approved' ? '승인' : d.status === 'rejected' ? '반려' : d.status === 'pending' ? '대기' : d.status,
       '결재라인': approverNames,
+      '참조자': ccNames || '없음',
       '내용': d.content || '',
       '첨부파일': files,
       '작성일': d.createdAt ? new Date(d.createdAt).toLocaleDateString('ko-KR') : '',
@@ -1222,7 +1300,7 @@ function exportToExcel() {
   const ws = XLSX.utils.json_to_sheet(data);
   // 컬럼 너비 자동 조절
   ws['!cols'] = [
-    {wch:14},{wch:30},{wch:12},{wch:10},{wch:16},{wch:8},{wch:40},{wch:40},{wch:30},{wch:12},{wch:12}
+    {wch:14},{wch:30},{wch:12},{wch:10},{wch:16},{wch:8},{wch:40},{wch:20},{wch:40},{wch:30},{wch:12},{wch:12}
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Documents');
