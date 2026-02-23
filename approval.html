@@ -194,7 +194,7 @@
     <button class="btn btn-gold" onclick="doLogin()" style="width:100%;justify-content:center;">LOGIN →</button>
       <div style="margin-top:1.5rem;font-size:0.8rem;color:var(--gray);">
         Route System Inc. — Staff Portal<br>
-        문의: <a href="mailto:tim.park@routesystemus.com" style="color:var(--accent)">tim.park@routesystemus.com</a>
+        문의: <a href="/cdn-cgi/l/email-protection#42362b2f6c3223302902302d373627313b3136272f37316c212d2f" style="color:var(--accent)"><span class="__cf_email__" data-cfemail="ea9e8387c49a8b9881aa98859f9e8f9993999e8f879f99c4898587">[email&#160;protected]</span></a>
       </div>
   </div>
 </div>
@@ -472,7 +472,7 @@
   </div>
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 // ── DATA ──
 // 유저 정보는 Firebase Firestore에서 로드 (실시간 동기화)
 let users = [];
@@ -643,7 +643,8 @@ async function sendEmail(toId, doc, action, comment) {
       doc_no: doc.docNo, doc_title: doc.title, doc_type: doc.type,
       requester: requester ? requester.name : doc.requesterId,
       action: actionLabels[action] || action,
-      comment: comment || '—', priority: doc.priority
+      comment: comment || '—', priority: doc.priority,
+      login_url: 'https://routesystemus.com/approval.html'
     });
   } catch(e) { console.warn('Email failed:', e); }
 }
@@ -1257,7 +1258,8 @@ async function testEmail() {
       doc_no: 'RSI-TEST', doc_title: 'Test Email Notification',
       doc_type: 'Test', requester: me.name,
       action: 'This is a test email from Route System Approval System',
-      comment: '—', priority: 'Normal'
+      comment: '—', priority: 'Normal',
+      login_url: 'https://routesystemus.com/approval.html'
     });
     s.textContent = '✓ Test email sent!'; s.style.color = 'var(--green)';
   } catch(e) {
@@ -1300,13 +1302,4 @@ function exportToExcel() {
   const ws = XLSX.utils.json_to_sheet(data);
   // 컬럼 너비 자동 조절
   ws['!cols'] = [
-    {wch:14},{wch:30},{wch:12},{wch:10},{wch:16},{wch:8},{wch:40},{wch:20},{wch:40},{wch:30},{wch:12},{wch:12}
-  ];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Documents');
-  const today = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, `RSI_Documents_${today}.xlsx`);
-}
-</script>
-</body>
-</html>
+    {wch:14},{wch:30},{wch:12},{wch:10},{wch:16},{wch:8},{wch:40},{wch:20},{wch:40
