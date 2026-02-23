@@ -193,7 +193,7 @@
     <button class="btn btn-gold" onclick="doLogin()" style="width:100%;justify-content:center;">LOGIN →</button>
       <div style="margin-top:1.5rem;font-size:0.8rem;color:var(--gray);">
         Route System Inc. — Staff Portal<br>
-        문의: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="8af9faebf8e1caf8e5fffeefa7f9f3f9feefe7a4e9e5e7">[email&#160;protected]</a>
+        문의: <a href="mailto:tim.park@routesystemus.com" style="color:var(--accent)">tim.park@routesystemus.com</a>
       </div>
   </div>
 </div>
@@ -463,13 +463,14 @@
 
 <script>
 // ── DATA ──
-// 유저 정보는 항상 코드에서 로드 (localStorage 무시)
-let users = [
-  { id:'spark@route-system.com',        name:'Sung Eun Park',  pw:'Spark@2026',  role:'Admin',  email:'spark@route-system.com' },
-  { id:'mkim@route-system.com',         name:'Minki Kim',      pw:'Mkim@2026',   role:'Admin',  email:'mkim@route-system.com' },
-  { id:'kcho@route-system.com',         name:'Kyle Cho',       pw:'Kcho@2026',   role:'Staff',  email:'kcho@route-system.com' },
-  { id:'hosungha74@route-system.com',   name:'Hosung Ha',      pw:'Hha@2026',    role:'Staff',  email:'hosungha74@route-system.com' },
-  { id:'jonghyun.lee@route-system.com', name:'Jonghyun Lee',   pw:'Jlee@2026',   role:'Staff',  email:'jonghyun.lee@route-system.com' },
+// 유저 정보는 Firebase Firestore에서 로드 (실시간 동기화)
+let users = [];
+const DEFAULT_USERS = [
+  { id:'tim.park@routesystemus.com',      name:'Sung Eun Park',  pw:'Spark@2026',  role:'Admin',  email:'tim.park@routesystemus.com' },
+  { id:'minki.kim@routesystemus.com',     name:'Minki Kim',      pw:'Mkim@2026',   role:'Admin',  email:'minki.kim@routesystemus.com' },
+  { id:'kyle.cho@routesystemus.com',      name:'Kyle Cho',       pw:'Kcho@2026',   role:'Staff',  email:'kyle.cho@routesystemus.com' },
+  { id:'hosung.ha@routesystemus.com',     name:'Hosung Ha',      pw:'Hha@2026',    role:'Staff',  email:'hosung.ha@routesystemus.com' },
+  { id:'jonghyun.lee@routesystemus.com',  name:'Jonghyun Lee',   pw:'Jlee@2026',   role:'Staff',  email:'jonghyun.lee@routesystemus.com' },
 ];
 let docs = [];
 let currentUser = null;
@@ -498,7 +499,37 @@ window.addEventListener('load', function() {
       if (d.exists) docCounter = d.data().value || 0;
     });
 
-    // 실시간 문서 동기화
+    // ── 유저 실시간 동기화 (Firebase) ──
+    db.collection('users').onSnapshot(snapshot => {
+      if (snapshot.empty) {
+        // Firebase에 유저가 없으면 기본 유저 초기화
+        console.log('No users found, initializing defaults...');
+        DEFAULT_USERS.forEach(u => {
+          db.collection('users').doc(u.id).set(u);
+        });
+      } else {
+        users = [];
+        snapshot.forEach(d => users.push(d.data()));
+        users.sort((a,b) => a.name.localeCompare(b.name));
+        console.log('Firebase users loaded:', users.length);
+        if (currentUser) {
+          // 현재 로그인 유저 정보 갱신
+          const updated = users.find(u => u.id === currentUser.id);
+          if (updated) {
+            currentUser = updated;
+            document.getElementById('topbarUser').textContent = updated.name + ' (' + updated.role + ')';
+          }
+          renderUsers();
+          refreshAll();
+        }
+      }
+    }, err => {
+      console.error('Users sync error:', err);
+      // Firebase 오류 시 기본 유저 사용
+      users = [...DEFAULT_USERS];
+    });
+
+    // ── 문서 실시간 동기화 ──
     db.collection('documents').onSnapshot(snapshot => {
       docs = [];
       snapshot.forEach(d => docs.push(d.data()));
@@ -508,7 +539,7 @@ window.addEventListener('load', function() {
         refreshAll();
         ['mine','pending','all','dashboard'].forEach(p => {
           const el = document.getElementById('page-'+p);
-          if (el && el.style.display === 'block') refreshPage(p);
+          if (el && el.classList.contains('active')) refreshPage(p);
         });
       }
     }, err => {
@@ -1062,12 +1093,14 @@ function saveEditUser() {
   const u = users.find(u=>u.id===id); if (!u) return;
   u.name = name; u.email = email; u.role = role;
   if (pw) u.pw = pw;
-  saveData();
-  if (id === currentUser.id) {
-    currentUser.name = name; currentUser.role = role;
-    document.getElementById('topbarUser').textContent = name+' ('+role+')';
-  }
-  closeModal('editUserModal'); renderUsers(); alert('✓ User updated!');
+  // Firebase에 저장
+  db.collection('users').doc(id).set(u).then(() => {
+    if (id === currentUser.id) {
+      currentUser.name = name; currentUser.role = role;
+      document.getElementById('topbarUser').textContent = name+' ('+role+')';
+    }
+    closeModal('editUserModal'); renderUsers(); alert('✓ User updated!');
+  }).catch(e => alert('저장 오류: ' + e.message));
 }
 
 function openAddUser() { document.getElementById('userModal').classList.add('open'); }
@@ -1080,14 +1113,20 @@ function addUser() {
   const role = document.getElementById('newUserRole').value;
   if (!name || !id || !pw) { alert('Please fill in required fields.'); return; }
   if (users.find(u=>u.id===id)) { alert('User ID already exists.'); return; }
-  users.push({ id, name, pw, role, email });
-  saveData(); closeModal('userModal'); renderUsers();
-  ['newUserName','newUserId','newUserEmail','newUserPw'].forEach(i => document.getElementById(i).value='');
+  const newUser = { id, name, pw, role, email };
+  // Firebase에 저장
+  db.collection('users').doc(id).set(newUser).then(() => {
+    closeModal('userModal');
+    ['newUserName','newUserId','newUserEmail','newUserPw'].forEach(i => document.getElementById(i).value='');
+    alert('✓ User added!');
+  }).catch(e => alert('저장 오류: ' + e.message));
 }
 
 function removeUser(id) {
   if (!confirm('Remove this user?')) return;
-  users = users.filter(u=>u.id!==id); saveData(); renderUsers();
+  db.collection('users').doc(id).delete().then(() => {
+    alert('✓ User removed!');
+  }).catch(e => alert('삭제 오류: ' + e.message));
 }
 
 // ── SETTINGS ──
