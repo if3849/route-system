@@ -171,6 +171,54 @@
     .step-guide li::before { content:counter(steps); background:var(--accent); color:var(--black); width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; flex-shrink:0; margin-top:2px; }
     code { color:var(--accent); background:var(--dark3); padding:1px 5px; font-size:0.85em; }
 
+    /* WHITE BACKGROUND TEXTAREA for better readability */
+    textarea.field-input-white {
+      width:100%; background:#ffffff; border:1px solid #cccccc; color:#111111;
+      padding:11px 14px; font-family:'Barlow',sans-serif; font-size:0.95rem;
+      outline:none; margin-bottom:0; transition:border-color 0.2s;
+      resize:vertical; min-height:100px; line-height:1.7;
+    }
+    textarea.field-input-white:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(200,169,110,0.2); }
+    textarea.field-input-white::placeholder { color:#999999; }
+
+    /* EXPANDED EDITOR MODAL */
+    #expandEditorModal {
+      display:none; position:fixed; inset:0; z-index:300;
+      background:rgba(0,0,0,0.85); backdrop-filter:blur(6px);
+      align-items:center; justify-content:center; padding:2rem;
+    }
+    #expandEditorModal.open { display:flex; }
+    .expand-editor-box {
+      background:var(--dark); border:1px solid var(--gray); width:100%; max-width:900px;
+      height:80vh; display:flex; flex-direction:column; position:relative;
+    }
+    .expand-editor-box::before { content:''; position:absolute; top:-1px; left:40px; width:60px; height:3px; background:var(--accent); }
+    .expand-editor-header {
+      padding:1rem 1.5rem; border-bottom:1px solid var(--dark3);
+      display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+    }
+    .expand-editor-header .modal-title { font-size:1.3rem; }
+    .expand-editor-body { flex:1; padding:1.5rem; display:flex; flex-direction:column; overflow:hidden; }
+    .expand-editor-body textarea {
+      flex:1; width:100%; background:#ffffff; border:1px solid #cccccc; color:#111111;
+      padding:16px 18px; font-family:'Barlow',sans-serif; font-size:1rem;
+      outline:none; resize:none; line-height:1.8; border-radius:4px;
+    }
+    .expand-editor-body textarea:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(200,169,110,0.2); }
+    .expand-editor-body textarea::placeholder { color:#999999; }
+    .expand-editor-footer {
+      padding:1rem 1.5rem; border-top:1px solid var(--dark3);
+      display:flex; gap:0.8rem; justify-content:space-between; align-items:center; flex-shrink:0;
+    }
+    .char-count { font-size:0.8rem; color:var(--mid); font-family:'Barlow Condensed',sans-serif; letter-spacing:1px; }
+    .btn-expand-trigger {
+      background:transparent; border:1px solid var(--gray); color:var(--mid);
+      padding:6px 12px; cursor:pointer; font-family:'Barlow Condensed',sans-serif;
+      font-size:0.75rem; letter-spacing:1px; text-transform:uppercase;
+      transition:all 0.2s; display:inline-flex; align-items:center; gap:0.4rem;
+    }
+    .btn-expand-trigger:hover { border-color:var(--accent); color:var(--accent); }
+
     @media (max-width: 768px) {
       .sidebar { display:none; }
       .main { margin-left:0; }
@@ -282,8 +330,11 @@
           <button class="btn-add-approver" onclick="addCcRow()">+ 참조자 추가 / Add CC</button>
         </div>
         <div class="form-group">
-          <label class="field-label">Content / Details</label>
-          <textarea class="field-input" id="docContent" placeholder="Describe the purpose and details..."></textarea>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+            <label class="field-label" style="margin-bottom:0;">Content / Details</label>
+            <button class="btn-expand-trigger" onclick="openExpandEditor()">⛶ 확대 편집 / Expand</button>
+          </div>
+          <textarea class="field-input-white" id="docContent" placeholder="Describe the purpose and details..." style="min-height:120px;"></textarea>
         </div>
         <div class="form-group">
           <label class="field-label">📎 OneDrive 첨부 링크</label>
@@ -472,6 +523,26 @@
   </div>
 </div>
 
+<!-- EXPANDED CONTENT EDITOR MODAL -->
+<div id="expandEditorModal">
+  <div class="expand-editor-box">
+    <div class="expand-editor-header">
+      <div class="modal-title">📝 Content / Details — 확대 편집</div>
+      <button class="modal-close" onclick="closeExpandEditor()">✕</button>
+    </div>
+    <div class="expand-editor-body">
+      <textarea id="expandEditorText" placeholder="내용을 자유롭게 작성하세요... &#10;Write your content here..." oninput="updateCharCount()"></textarea>
+    </div>
+    <div class="expand-editor-footer">
+      <span class="char-count" id="expandCharCount">0 characters</span>
+      <div style="display:flex;gap:0.8rem;">
+        <button class="btn btn-outline" onclick="closeExpandEditor()">Cancel</button>
+        <button class="btn btn-gold" onclick="applyExpandEditor()">✓ Apply / 적용 →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 // ── DATA ──
 // 유저 정보는 Firebase Firestore에서 로드 (실시간 동기화)
@@ -602,6 +673,37 @@ function removeOnedriveLink(i) {
   onedriveLinks.splice(i, 1);
   renderOnedriveLinkList();
 }
+
+// ── EXPANDED CONTENT EDITOR ──
+function openExpandEditor() {
+  const src = document.getElementById('docContent');
+  const dest = document.getElementById('expandEditorText');
+  dest.value = src.value;
+  updateCharCount();
+  document.getElementById('expandEditorModal').classList.add('open');
+  setTimeout(() => dest.focus(), 100);
+}
+
+function closeExpandEditor() {
+  document.getElementById('expandEditorModal').classList.remove('open');
+}
+
+function applyExpandEditor() {
+  document.getElementById('docContent').value = document.getElementById('expandEditorText').value;
+  closeExpandEditor();
+}
+
+function updateCharCount() {
+  const len = document.getElementById('expandEditorText').value.length;
+  document.getElementById('expandCharCount').textContent = len.toLocaleString() + ' characters';
+}
+
+// ESC 키로 확대 편집 모달 닫기
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('expandEditorModal').classList.contains('open')) {
+    closeExpandEditor();
+  }
+});
 
 function saveData() {
   // Firebase에 저장 (localStorage 사용 안 함)
