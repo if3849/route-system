@@ -340,7 +340,8 @@
           <label class="field-label">📎 OneDrive 첨부 링크</label>
           <div id="onedriveLinkList" style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.5rem;"></div>
           <div style="display:flex;gap:0.5rem;">
-            <input class="field-input" type="text" id="onedriveLinkInput" placeholder="OneDrive 공유 링크를 붙여넣기 하세요..." style="flex:1;"/>
+            <input class="field-input" type="text" id="onedriveLinkInput" placeholder="OneDrive 공유 링크를 붙여넣기 하세요..." style="flex:1;" onpaste="setTimeout(()=>document.getElementById('onedriveLinkInput').dispatchEvent(new Event('input')),0)"/>
+            <button title="클립보드에서 붙여넣기" onclick="pasteFromClipboard('onedriveLinkInput')" style="background:var(--dark3);border:1px solid var(--gray);color:var(--mid);cursor:pointer;padding:0 10px;font-size:1rem;white-space:nowrap;transition:all .2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--gray)';this.style.color='var(--mid)'">📋</button>
             <input class="field-input" type="text" id="onedriveNameInput" placeholder="파일명 (예: 견적서.xlsx)" style="flex:1;"/>
             <button class="btn btn-outline" onclick="addOnedriveLink()" style="white-space:nowrap;">+ 추가</button>
           </div>
@@ -674,6 +675,23 @@ function removeOnedriveLink(i) {
   renderOnedriveLinkList();
 }
 
+// 클립보드 붙여넣기 (📋 버튼용)
+async function pasteFromClipboard(targetId) {
+  try {
+    const text = await navigator.clipboard.readText();
+    const el = document.getElementById(targetId);
+    if (el) {
+      el.value = text;
+      el.focus();
+    }
+  } catch(e) {
+    // 권한 거부 시 수동 포커스 후 안내
+    const el = document.getElementById(targetId);
+    if (el) { el.focus(); el.select(); }
+    alert('📋 입력칸을 클릭한 후 Ctrl+V 로 붙여넣기 하세요.');
+  }
+}
+
 // ── EXPANDED CONTENT EDITOR ──
 function openExpandEditor() {
   const src = document.getElementById('docContent');
@@ -845,7 +863,7 @@ function refreshPage(name) {
   if (name === 'pending') renderTable('pendingTable', visible.filter(d => isMyTurn(d)), 'pending');
   if (name === 'all') renderTable('allTable', visible, 'all');
   if (name === 'users') renderUsers();
-  if (name === 'new') { buildApproverLine(); buildCcLine(); }
+  if (name === 'new') { buildApproverLine(); buildCcLine(); setTimeout(()=>{ const t=document.getElementById('docTitle'); if(t) t.focus(); },100); }
   if (name === 'settings') loadEmailSettings();
 }
 
