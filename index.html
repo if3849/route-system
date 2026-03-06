@@ -221,6 +221,8 @@
       .process-grid { grid-template-columns: 1fr; }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script>emailjs.init("UeNmq8x-Jq_IcPeHG");</script>
 </head>
 <body>
 
@@ -460,14 +462,14 @@
       </div>
     </div>
     <div>
-      <form class="contact-form" onsubmit="handleSubmit(event)">
+      <form class="contact-form" id="contact-form" onsubmit="handleSubmit(event)">
         <div class="form-row">
-          <div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" placeholder="John" required/></div>
-          <div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" placeholder="Smith" required/></div>
+          <div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" name="first_name" placeholder="John" required/></div>
+          <div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" name="last_name" placeholder="Smith" required/></div>
         </div>
-        <div class="form-group"><label class="form-label">Email Address</label><input class="form-input" type="email" placeholder="john@company.com" required/></div>
-        <div class="form-group"><label class="form-label">Company</label><input class="form-input" type="text" placeholder="Your Company"/></div>
-        <div class="form-group"><label class="form-label">Message</label><textarea class="form-textarea" placeholder="Tell us about your project..." required></textarea></div>
+        <div class="form-group"><label class="form-label">Email Address</label><input class="form-input" type="email" name="user_email" placeholder="john@company.com" required/></div>
+        <div class="form-group"><label class="form-label">Company</label><input class="form-input" type="text" name="company" placeholder="Your Company"/></div>
+        <div class="form-group"><label class="form-label">Message</label><textarea class="form-textarea" name="message" placeholder="Tell us about your project..." required></textarea></div>
         <button class="form-btn" type="submit">Send Message →</button>
       </form>
     </div>
@@ -488,8 +490,34 @@
   function handleSubmit(e) {
     e.preventDefault();
     const btn = e.target.querySelector('.form-btn');
-    btn.textContent = 'Message Sent ✓'; btn.style.background = '#4a9e6b';
-    setTimeout(() => { btn.textContent = 'Send Message →'; btn.style.background = ''; e.target.reset(); }, 3000);
+    const originalText = btn.textContent;
+    btn.textContent = 'Sending...';
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+
+    emailjs.sendForm('service_mk3827x', 'template_lh321x5', '#contact-form')
+      .then(() => {
+        btn.textContent = 'Message Sent ✓';
+        btn.style.background = '#4a9e6b';
+        btn.style.opacity = '1';
+        e.target.reset();
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = '';
+          btn.disabled = false;
+        }, 4000);
+      })
+      .catch((error) => {
+        console.error('EmailJS error:', error);
+        btn.textContent = 'Failed. Try Again.';
+        btn.style.background = '#9e4a4a';
+        btn.style.opacity = '1';
+        btn.disabled = false;
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = '';
+        }, 3000);
+      });
   }
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
