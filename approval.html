@@ -7,7 +7,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-  <!-- Firebase Compat SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <style>
@@ -48,6 +47,14 @@
     .btn-red { background:var(--red); color:white; }
     .btn-red:hover { background:#a93226; }
     .login-error { background:rgba(192,57,43,0.15); border:1px solid var(--red); color:#e74c3c; padding:10px 14px; font-size:0.85rem; margin-bottom:1rem; display:none; }
+
+    /* Firebase 연결 오류 배너 */
+    #firebaseErrorBanner {
+      display:none; position:fixed; top:0; left:0; right:0; z-index:999;
+      background:rgba(192,57,43,0.95); color:white; padding:12px 20px;
+      font-size:0.85rem; text-align:center; font-family:'Barlow Condensed',sans-serif;
+      letter-spacing:1px;
+    }
 
     #app { display:none; min-height:100vh; }
     .topbar { position:fixed; top:0; left:0; right:0; z-index:100; height:60px; background:rgba(10,10,10,0.97); border-bottom:1px solid rgba(200,169,110,0.2); display:flex; align-items:center; justify-content:space-between; padding:0 1.5rem; backdrop-filter:blur(8px); }
@@ -133,7 +140,6 @@
     .history-text { font-size:0.85rem; color:var(--light); line-height:1.6; }
     .history-time { font-size:0.75rem; color:var(--mid); }
 
-    /* APPROVAL LINE */
     .approver-line { display:flex; flex-direction:column; gap:0.5rem; }
     .approver-row { display:flex; align-items:center; gap:0.6rem; }
     .approver-step-num { font-family:'Bebas Neue',sans-serif; font-size:1.1rem; color:var(--accent); min-width:22px; }
@@ -143,7 +149,6 @@
     .btn-remove-approver { background:none; border:none; color:var(--mid); cursor:pointer; font-size:1rem; padding:2px 6px; transition:color 0.2s; flex-shrink:0; }
     .btn-remove-approver:hover { color:var(--red); }
 
-    /* PROGRESS DOTS */
     .approval-progress { display:flex; align-items:flex-start; flex-wrap:wrap; gap:0.2rem; margin:0.5rem 0; }
     .progress-step { display:flex; flex-direction:column; align-items:center; gap:0.2rem; }
     .progress-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:600; border:2px solid; flex-shrink:0; }
@@ -154,7 +159,6 @@
     .progress-arrow { color:var(--gray); font-size:0.8rem; margin-top:7px; }
     .progress-name { font-size:0.65rem; color:var(--mid); text-align:center; max-width:50px; line-height:1.2; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 
-    /* USERS & SETTINGS */
     .user-card { background:var(--dark); border:1px solid var(--dark3); padding:1.5rem; display:flex; align-items:center; justify-content:space-between; margin-bottom:1px; transition:background 0.2s; flex-wrap:wrap; gap:1rem; }
     .user-card:hover { background:var(--dark2); }
     .user-avatar { width:42px; height:42px; background:var(--gray); display:flex; align-items:center; justify-content:center; font-family:'Bebas Neue',sans-serif; font-size:1.1rem; color:var(--accent); flex-shrink:0; }
@@ -171,7 +175,6 @@
     .step-guide li::before { content:counter(steps); background:var(--accent); color:var(--black); width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; flex-shrink:0; margin-top:2px; }
     code { color:var(--accent); background:var(--dark3); padding:1px 5px; font-size:0.85em; }
 
-    /* WHITE BACKGROUND TEXTAREA for better readability */
     textarea.field-input-white {
       width:100%; background:#ffffff; border:1px solid #cccccc; color:#111111;
       padding:11px 14px; font-family:'Barlow',sans-serif; font-size:0.95rem;
@@ -181,7 +184,6 @@
     textarea.field-input-white:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(200,169,110,0.2); }
     textarea.field-input-white::placeholder { color:#999999; }
 
-    /* EXPANDED EDITOR MODAL */
     #expandEditorModal {
       display:none; position:fixed; inset:0; z-index:300;
       background:rgba(0,0,0,0.85); backdrop-filter:blur(6px);
@@ -193,30 +195,14 @@
       height:80vh; display:flex; flex-direction:column; position:relative;
     }
     .expand-editor-box::before { content:''; position:absolute; top:-1px; left:40px; width:60px; height:3px; background:var(--accent); }
-    .expand-editor-header {
-      padding:1rem 1.5rem; border-bottom:1px solid var(--dark3);
-      display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
-    }
+    .expand-editor-header { padding:1rem 1.5rem; border-bottom:1px solid var(--dark3); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
     .expand-editor-header .modal-title { font-size:1.3rem; }
     .expand-editor-body { flex:1; padding:1.5rem; display:flex; flex-direction:column; overflow:hidden; }
-    .expand-editor-body textarea {
-      flex:1; width:100%; background:#ffffff; border:1px solid #cccccc; color:#111111;
-      padding:16px 18px; font-family:'Barlow',sans-serif; font-size:1rem;
-      outline:none; resize:none; line-height:1.8; border-radius:4px;
-    }
+    .expand-editor-body textarea { flex:1; width:100%; background:#ffffff; border:1px solid #cccccc; color:#111111; padding:16px 18px; font-family:'Barlow',sans-serif; font-size:1rem; outline:none; resize:none; line-height:1.8; border-radius:4px; }
     .expand-editor-body textarea:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(200,169,110,0.2); }
-    .expand-editor-body textarea::placeholder { color:#999999; }
-    .expand-editor-footer {
-      padding:1rem 1.5rem; border-top:1px solid var(--dark3);
-      display:flex; gap:0.8rem; justify-content:space-between; align-items:center; flex-shrink:0;
-    }
+    .expand-editor-footer { padding:1rem 1.5rem; border-top:1px solid var(--dark3); display:flex; gap:0.8rem; justify-content:space-between; align-items:center; flex-shrink:0; }
     .char-count { font-size:0.8rem; color:var(--mid); font-family:'Barlow Condensed',sans-serif; letter-spacing:1px; }
-    .btn-expand-trigger {
-      background:transparent; border:1px solid var(--gray); color:var(--mid);
-      padding:6px 12px; cursor:pointer; font-family:'Barlow Condensed',sans-serif;
-      font-size:0.75rem; letter-spacing:1px; text-transform:uppercase;
-      transition:all 0.2s; display:inline-flex; align-items:center; gap:0.4rem;
-    }
+    .btn-expand-trigger { background:transparent; border:1px solid var(--gray); color:var(--mid); padding:6px 12px; cursor:pointer; font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; letter-spacing:1px; text-transform:uppercase; transition:all 0.2s; display:inline-flex; align-items:center; gap:0.4rem; }
     .btn-expand-trigger:hover { border-color:var(--accent); color:var(--accent); }
 
     @media (max-width: 768px) {
@@ -229,21 +215,29 @@
 </head>
 <body>
 
+<!-- Firebase 연결 오류 배너 -->
+<div id="firebaseErrorBanner">
+  ⚠️ 서버 연결 오류가 발생했습니다. 페이지를 새로고침 하거나 잠시 후 다시 시도해주세요.
+</div>
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-box">
     <div class="login-logo">ROUTE <span>SYSTEM</span></div>
     <div class="login-sub">Approval System</div>
     <div class="login-error" id="loginError">Invalid ID or password.</div>
+    <div class="login-error" id="loginLoadingError" style="background:rgba(200,169,110,0.1);border-color:var(--accent);color:var(--accent);">
+      서버에 연결 중입니다. 잠시 후 다시 시도해주세요.
+    </div>
     <label class="field-label">User ID</label>
     <input class="field-input" type="text" id="loginId" placeholder="Enter your ID" onkeydown="if(event.key==='Enter')doLogin()"/>
     <label class="field-label">Password</label>
     <input class="field-input" type="password" id="loginPw" placeholder="Enter your password" onkeydown="if(event.key==='Enter')doLogin()"/>
     <button class="btn btn-gold" onclick="doLogin()" style="width:100%;justify-content:center;">LOGIN →</button>
-      <div style="margin-top:1.5rem;font-size:0.8rem;color:var(--gray);">
-        Route System Inc. — Staff Portal<br>
-        문의: <a href="/cdn-cgi/l/email-protection#d0a4b9bdfea0b1a2bb90a2bfa5a4b5a3a9a3a4b5bda5a3feb3bfbd" style="color:var(--accent)"><span class="__cf_email__" data-cfemail="23574a4e0d5342514863514c565746505a5057464e56500d404c4e">[email&#160;protected]</span></a>
-      </div>
+    <div style="margin-top:1.5rem;font-size:0.8rem;color:var(--gray);">
+      Route System Inc. — Staff Portal<br>
+      문의: <a href="mailto:tim.park@routesystemus.com" style="color:var(--accent)">tim.park@routesystemus.com</a>
+    </div>
   </div>
 </div>
 
@@ -271,7 +265,6 @@
   </div>
 
   <div class="main">
-
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
       <div class="page-header">
@@ -319,13 +312,13 @@
         </div>
         <div class="form-group">
           <label class="field-label">Approval Line — 순차 결재라인</label>
-          <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">결재자를 순서대로 추가하세요. 1번 결재 후 2번으로 자동 전달됩니다.</div>
+          <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">결재자를 순서대로 추가하세요.</div>
           <div class="approver-line" id="approverLine"></div>
           <button class="btn-add-approver" onclick="addApproverRow()">+ 결재자 추가 / Add Approver</button>
         </div>
         <div class="form-group">
-          <label class="field-label">CC / 참조자 — 문서 열람 가능</label>
-          <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">참조자는 결재 권한 없이 문서를 열람만 할 수 있습니다.</div>
+          <label class="field-label">CC / 참조자</label>
+          <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">참조자는 결재 권한 없이 열람만 가능합니다.</div>
           <div id="ccLine"></div>
           <button class="btn-add-approver" onclick="addCcRow()">+ 참조자 추가 / Add CC</button>
         </div>
@@ -340,13 +333,10 @@
           <label class="field-label">📎 OneDrive 첨부 링크</label>
           <div id="onedriveLinkList" style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.5rem;"></div>
           <div style="display:flex;gap:0.5rem;">
-            <input class="field-input" type="text" id="onedriveLinkInput" placeholder="OneDrive 공유 링크를 붙여넣기 하세요..." style="flex:1;" onpaste="setTimeout(()=>document.getElementById('onedriveLinkInput').dispatchEvent(new Event('input')),0)"/>
-            <button title="클립보드에서 붙여넣기" onclick="pasteFromClipboard('onedriveLinkInput')" style="background:var(--dark3);border:1px solid var(--gray);color:var(--mid);cursor:pointer;padding:0 10px;font-size:1rem;white-space:nowrap;transition:all .2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--gray)';this.style.color='var(--mid)'">📋</button>
+            <input class="field-input" type="text" id="onedriveLinkInput" placeholder="OneDrive 공유 링크를 붙여넣기 하세요..." style="flex:1;"/>
+            <button title="클립보드에서 붙여넣기" onclick="pasteFromClipboard('onedriveLinkInput')" style="background:var(--dark3);border:1px solid var(--gray);color:var(--mid);cursor:pointer;padding:0 10px;font-size:1rem;transition:all .2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--gray)';this.style.color='var(--mid)'">📋</button>
             <input class="field-input" type="text" id="onedriveNameInput" placeholder="파일명 (예: 견적서.xlsx)" style="flex:1;"/>
             <button class="btn btn-outline" onclick="addOnedriveLink()" style="white-space:nowrap;">+ 추가</button>
-          </div>
-          <div style="font-size:0.75rem;color:var(--mid);margin-top:0.4rem;">
-            OneDrive에서 파일 공유 링크 복사 후 붙여넣기 하세요.
           </div>
         </div>
         <div style="display:flex;gap:1rem;margin-top:0.5rem;">
@@ -420,17 +410,6 @@
           결재 요청 및 승인/반려 시 담당자에게 자동으로 이메일이 발송됩니다.<br>
           무료 플랜: 월 200건 발송 가능 &nbsp;→&nbsp; <a href="https://www.emailjs.com" target="_blank">emailjs.com</a>
         </div>
-        <div class="settings-head" style="margin-bottom:1rem;">⚙️ Setup Guide (설정 방법)</div>
-        <ol class="step-guide">
-          <li><strong>emailjs.com</strong> 무료 회원가입</li>
-          <li><strong>Email Services</strong> → Add Service → Gmail 선택 후 계정 연결</li>
-          <li><strong>Email Templates</strong> → Create New Template<br>
-            아래 변수를 Template에 사용하세요:<br>
-            <code>{{to_email}}</code> <code>{{to_name}}</code> <code>{{doc_no}}</code> <code>{{doc_title}}</code> <code>{{doc_type}}</code> <code>{{requester}}</code> <code>{{action}}</code> <code>{{comment}}</code> <code>{{priority}}</code>
-          </li>
-          <li>아래에 <strong>Public Key, Service ID, Template ID</strong> 입력 후 저장</li>
-          <li><strong>Users 페이지</strong>에서 각 유저의 이메일 주소 등록</li>
-        </ol>
         <div style="margin-top:1.5rem;">
           <div class="form-group">
             <label class="field-label">EmailJS Public Key</label>
@@ -454,7 +433,6 @@
         </div>
       </div>
     </div>
-
   </div>
 </div>
 
@@ -524,7 +502,7 @@
   </div>
 </div>
 
-<!-- EXPANDED CONTENT EDITOR MODAL -->
+<!-- EXPANDED EDITOR -->
 <div id="expandEditorModal">
   <div class="expand-editor-box">
     <div class="expand-editor-header">
@@ -532,22 +510,36 @@
       <button class="modal-close" onclick="closeExpandEditor()">✕</button>
     </div>
     <div class="expand-editor-body">
-      <textarea id="expandEditorText" placeholder="내용을 자유롭게 작성하세요... &#10;Write your content here..." oninput="updateCharCount()"></textarea>
+      <textarea id="expandEditorText" placeholder="내용을 자유롭게 작성하세요..." oninput="updateCharCount()"></textarea>
     </div>
     <div class="expand-editor-footer">
       <span class="char-count" id="expandCharCount">0 characters</span>
       <div style="display:flex;gap:0.8rem;">
         <button class="btn btn-outline" onclick="closeExpandEditor()">Cancel</button>
-        <button class="btn btn-gold" onclick="applyExpandEditor()">✓ Apply / 적용 →</button>
+        <button class="btn btn-gold" onclick="applyExpandEditor()">✓ Apply →</button>
       </div>
     </div>
   </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
-// ── DATA ──
-// 유저 정보는 Firebase Firestore에서 로드 (실시간 동기화)
+<script>
+// ── 버그 수정 핵심 포인트 ──
+// 1. Firebase 오류 시 DEFAULT_USERS로 절대 fallback하지 않음
+// 2. snapshot.empty 시 초기화 여부를 meta/initialized 로 판단
+// 3. 비밀번호 저장 시 명확한 성공/실패 피드백
+
 let users = [];
+let usersLoaded = false; // Firebase 유저 로드 완료 여부
+let docs = [];
+let currentUser = null;
+let currentDocId = null;
+let docCounter = 0;
+let db = null;
+let approverRows = [];
+let ccRows = [];
+let onedriveLinks = [];
+
+// 기본 유저 — 최초 Firebase 초기화 시에만 사용 (fallback 절대 사용 안 함)
 const DEFAULT_USERS = [
   { id:'tim.park@routesystemus.com',      name:'Sung Eun Park',  pw:'Spark@2026',  role:'Admin',  email:'tim.park@routesystemus.com' },
   { id:'minki.kim@routesystemus.com',     name:'Minki Kim',      pw:'Mkim@2026',   role:'Admin',  email:'minki.kim@routesystemus.com' },
@@ -555,13 +547,7 @@ const DEFAULT_USERS = [
   { id:'hosung.ha@routesystemus.com',     name:'Hosung Ha',      pw:'Hha@2026',    role:'Staff',  email:'hosung.ha@routesystemus.com' },
   { id:'jonghyun.lee@routesystemus.com',  name:'Jonghyun Lee',   pw:'Jlee@2026',   role:'Staff',  email:'jonghyun.lee@routesystemus.com' },
 ];
-let docs = [];
-let currentUser = null;
-let currentDocId = null;
-let docCounter = 0;
-let db = null;
 
-// Firebase 초기화
 const firebaseConfig = {
   apiKey: 'AIzaSyAwx8ca2LhwyILxUV2G4Pm2vTBsBwLKgCI',
   authDomain: 'rotue-system.firebaseapp.com',
@@ -570,33 +556,48 @@ const firebaseConfig = {
   messagingSenderId: '286308453948',
   appId: '1:286308453948:web:9d43cd628187b567b4bd39'
 };
-// Firebase 초기화는 페이지 로드 후 실행
+
 window.addEventListener('load', function() {
   try {
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
-    console.log('Firebase initialized!');
 
     // 카운터 로드
     db.collection('meta').doc('counter').get().then(d => {
       if (d.exists) docCounter = d.data().value || 0;
     });
 
-    // ── 유저 실시간 동기화 (Firebase) ──
+    // ── 유저 실시간 동기화 ──
     db.collection('users').onSnapshot(snapshot => {
+      // ✅ 수정 1: snapshot.empty 시 초기화 여부를 meta로 확인
       if (snapshot.empty) {
-        // Firebase에 유저가 없으면 기본 유저 초기화
-        console.log('No users found, initializing defaults...');
-        DEFAULT_USERS.forEach(u => {
-          db.collection('users').doc(u.id).set(u);
+        db.collection('meta').doc('initialized').get().then(metaDoc => {
+          if (!metaDoc.exists) {
+            // 진짜 최초 설치 시에만 DEFAULT_USERS로 초기화
+            console.log('First-time setup: initializing default users...');
+            const batch = db.batch();
+            DEFAULT_USERS.forEach(u => {
+              batch.set(db.collection('users').doc(u.id), u);
+            });
+            batch.set(db.collection('meta').doc('initialized'), {
+              value: true, at: Date.now()
+            });
+            batch.commit();
+          } else {
+            // 이미 초기화된 상태인데 users가 비어있음 — 오류 상황
+            console.error('Users collection is empty but system was already initialized!');
+            showFirebaseError();
+          }
         });
       } else {
+        // ✅ 정상: Firebase에서 유저 로드
         users = [];
         snapshot.forEach(d => users.push(d.data()));
-        users.sort((a,b) => a.name.localeCompare(b.name));
-        console.log('Firebase users loaded:', users.length);
+        users.sort((a, b) => a.name.localeCompare(b.name));
+        usersLoaded = true;
+        hideFirebaseError();
+
         if (currentUser) {
-          // 현재 로그인 유저 정보 갱신
           const updated = users.find(u => u.id === currentUser.id);
           if (updated) {
             currentUser = updated;
@@ -607,61 +608,68 @@ window.addEventListener('load', function() {
         }
       }
     }, err => {
-      console.error('Users sync error:', err);
-      // Firebase 오류 시 기본 유저 사용
-      users = [...DEFAULT_USERS];
+      // ✅ 수정 2: Firebase 오류 시 절대 DEFAULT_USERS로 fallback하지 않음
+      console.error('Firebase users sync error:', err);
+      showFirebaseError();
+      // 로그인 화면에 있을 경우 오류 메시지 표시
+      if (!currentUser) {
+        document.getElementById('loginLoadingError').style.display = 'block';
+      }
     });
 
     // ── 문서 실시간 동기화 ──
     db.collection('documents').onSnapshot(snapshot => {
       docs = [];
       snapshot.forEach(d => docs.push(d.data()));
-      docs.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
-      console.log('Firebase docs loaded:', docs.length);
+      docs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       if (currentUser) {
         refreshAll();
         ['mine','pending','all','dashboard'].forEach(p => {
-          const el = document.getElementById('page-'+p);
+          const el = document.getElementById('page-' + p);
           if (el && el.classList.contains('active')) refreshPage(p);
         });
       }
     }, err => {
-      console.error('Firebase error:', err);
-      alert('Firebase 연결 오류: ' + err.message);
+      console.error('Firebase documents sync error:', err);
+      showFirebaseError();
     });
+
   } catch(e) {
     console.error('Firebase init error:', e);
-    alert('Firebase 초기화 오류: ' + e.message);
+    showFirebaseError();
   }
 });
-// EmailJS 설정 (코드에 직접 입력 — 변경 시 여기를 수정하세요)
+
+function showFirebaseError() {
+  document.getElementById('firebaseErrorBanner').style.display = 'block';
+}
+function hideFirebaseError() {
+  document.getElementById('firebaseErrorBanner').style.display = 'none';
+  document.getElementById('loginLoadingError').style.display = 'none';
+}
+
+// EmailJS 설정
 const EMAIL_PUBLIC_KEY  = 'UeNmq8x-Jq_IcPeHG';
 const EMAIL_SERVICE_ID  = 'service_mk3827x';
 const EMAIL_TEMPLATE_ID = 'template_mst85o1';
 let emailCfg = JSON.parse(localStorage.getItem('rs_email_v3') || 'null') || {
-  publicKey:  EMAIL_PUBLIC_KEY,
-  serviceId:  EMAIL_SERVICE_ID,
-  templateId: EMAIL_TEMPLATE_ID
+  publicKey: EMAIL_PUBLIC_KEY, serviceId: EMAIL_SERVICE_ID, templateId: EMAIL_TEMPLATE_ID
 };
-let approverRows = [];
-let ccRows = []; // 참조자 목록
-let onedriveLinks = []; // OneDrive 첨부 링크 목록
+if (emailCfg.publicKey) { try { emailjs.init(emailCfg.publicKey); } catch(e){} }
 
+// ── OneDrive 링크 ──
 function addOnedriveLink() {
   const url = document.getElementById('onedriveLinkInput').value.trim();
   const name = document.getElementById('onedriveNameInput').value.trim();
   if (!url) { alert('링크를 입력해 주세요.'); return; }
   if (!url.startsWith('http')) { alert('올바른 링크를 입력해 주세요.'); return; }
-  const linkName = name || '첨부파일 ' + (onedriveLinks.length + 1);
-  onedriveLinks.push({ name: linkName, url });
+  onedriveLinks.push({ name: name || '첨부파일 ' + (onedriveLinks.length + 1), url });
   document.getElementById('onedriveLinkInput').value = '';
   document.getElementById('onedriveNameInput').value = '';
   renderOnedriveLinkList();
 }
-
 function renderOnedriveLinkList() {
-  const list = document.getElementById('onedriveLinkList');
-  if (!list) return;
+  const list = document.getElementById('onedriveLinkList'); if (!list) return;
   list.innerHTML = onedriveLinks.map((l, i) => `
     <div style="display:flex;align-items:center;gap:0.5rem;background:var(--dark2);border:1px solid var(--gray);padding:8px 12px;border-radius:6px;">
       <span style="font-size:0.85rem;color:var(--accent);">📄</span>
@@ -669,102 +677,63 @@ function renderOnedriveLinkList() {
       <button onclick="removeOnedriveLink(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.85rem;">✕</button>
     </div>`).join('');
 }
+function removeOnedriveLink(i) { onedriveLinks.splice(i, 1); renderOnedriveLinkList(); }
 
-function removeOnedriveLink(i) {
-  onedriveLinks.splice(i, 1);
-  renderOnedriveLinkList();
-}
-
-// 클립보드 붙여넣기 (📋 버튼용)
 async function pasteFromClipboard(targetId) {
   try {
     const text = await navigator.clipboard.readText();
     const el = document.getElementById(targetId);
-    if (el) {
-      el.value = text;
-      el.focus();
-    }
+    if (el) { el.value = text; el.focus(); }
   } catch(e) {
-    // 권한 거부 시 수동 포커스 후 안내
     const el = document.getElementById(targetId);
     if (el) { el.focus(); el.select(); }
     alert('📋 입력칸을 클릭한 후 Ctrl+V 로 붙여넣기 하세요.');
   }
 }
 
-// ── EXPANDED CONTENT EDITOR ──
+// ── 확대 편집 ──
 function openExpandEditor() {
-  const src = document.getElementById('docContent');
-  const dest = document.getElementById('expandEditorText');
-  dest.value = src.value;
+  document.getElementById('expandEditorText').value = document.getElementById('docContent').value;
   updateCharCount();
   document.getElementById('expandEditorModal').classList.add('open');
-  setTimeout(() => dest.focus(), 100);
+  setTimeout(() => document.getElementById('expandEditorText').focus(), 100);
 }
-
-function closeExpandEditor() {
-  document.getElementById('expandEditorModal').classList.remove('open');
-}
-
+function closeExpandEditor() { document.getElementById('expandEditorModal').classList.remove('open'); }
 function applyExpandEditor() {
   document.getElementById('docContent').value = document.getElementById('expandEditorText').value;
   closeExpandEditor();
 }
-
 function updateCharCount() {
   const len = document.getElementById('expandEditorText').value.length;
   document.getElementById('expandCharCount').textContent = len.toLocaleString() + ' characters';
 }
-
-// ESC 키로 확대 편집 모달 닫기
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && document.getElementById('expandEditorModal').classList.contains('open')) {
-    closeExpandEditor();
-  }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('expandEditorModal').classList.contains('open')) closeExpandEditor();
 });
 
-function saveData() {
-  // Firebase에 저장 (localStorage 사용 안 함)
-  db.collection('meta').doc('counter').set({ value: docCounter });
-}
-
+// ── Firebase 저장 ──
+function saveData() { db.collection('meta').doc('counter').set({ value: docCounter }); }
 async function saveDoc(docData) {
-  try {
-    await db.collection('documents').doc(docData.id).set(docData);
-    console.log('Document saved to Firebase:', docData.id);
-  } catch(e) {
-    console.error('Save failed:', e);
-    alert('저장 오류: ' + e.message);
-  }
+  await db.collection('documents').doc(docData.id).set(docData);
 }
-
-async function removeDoc(docId) {
-  await db.collection('documents').doc(docId).delete();
-}
+async function removeDoc(docId) { await db.collection('documents').doc(docId).delete(); }
 function saveEmailCfg() { localStorage.setItem('rs_email_v3', JSON.stringify(emailCfg)); }
 
-// EmailJS init
-if (emailCfg.publicKey) { try { emailjs.init(emailCfg.publicKey); } catch(e){} }
-
+// ── 이메일 발송 ──
 async function sendEmail(toId, doc, action, comment) {
-  if (!emailCfg.publicKey || !emailCfg.serviceId || !emailCfg.templateId) {
-    console.log('📧 Email config missing!'); return;
-  }
+  if (!emailCfg.publicKey || !emailCfg.serviceId || !emailCfg.templateId) return;
   const toUser = users.find(u => u.id === toId);
-  if (!toUser || !toUser.email) {
-    console.log('📧 User not found or no email:', toId); return;
-  }
+  if (!toUser || !toUser.email) return;
   const requester = users.find(u => u.id === doc.requesterId);
   const actionLabels = {
     submitted: 'A new document requires your approval',
-    approved:  'Document has been fully approved',
-    rejected:  'Document has been rejected',
+    approved: 'Document has been fully approved',
+    rejected: 'Document has been rejected',
     step_approved: 'Previous step approved — your approval is now required',
     cc_submitted: 'You have been added as CC on a new document',
-    cc_approved:  'A document you are CC\'d on has been fully approved',
-    cc_rejected:  'A document you are CC\'d on has been rejected'
+    cc_approved: 'A document you are CC\'d on has been fully approved',
+    cc_rejected: 'A document you are CC\'d on has been rejected'
   };
-  console.log('📧 Sending email to:', toUser.name, '(' + toUser.email + ')', 'action:', action);
   try {
     await emailjs.send(emailCfg.serviceId, emailCfg.templateId, {
       to_email: toUser.email, to_name: toUser.name,
@@ -774,32 +743,36 @@ async function sendEmail(toId, doc, action, comment) {
       comment: comment || '—', priority: doc.priority,
       login_url: window.location.href.split('?')[0]
     });
-    console.log('📧 Email sent successfully to:', toUser.name);
-  } catch(e) { console.error('📧 Email failed:', e); }
+  } catch(e) { console.error('Email failed:', e); }
 }
-
-// 참조자 전원에게 이메일 발송
 async function sendCcEmails(doc, action, comment) {
-  if (!doc.cc || !doc.cc.length) { console.log('📧 No CC users'); return; }
-  console.log('📧 Sending CC emails to:', doc.cc);
-  for (const ccId of doc.cc) {
-    await sendEmail(ccId, doc, action, comment);
-  }
+  if (!doc.cc || !doc.cc.length) return;
+  for (const ccId of doc.cc) await sendEmail(ccId, doc, action, comment);
 }
 
 // ── LOGIN / LOGOUT ──
 function doLogin() {
+  // ✅ 수정 3: Firebase 로드 전에 로그인 시도 차단
+  if (!usersLoaded) {
+    document.getElementById('loginLoadingError').style.display = 'block';
+    document.getElementById('loginError').style.display = 'none';
+    return;
+  }
   const id = document.getElementById('loginId').value.trim();
   const pw = document.getElementById('loginPw').value;
   const user = users.find(u => u.id === id && u.pw === pw);
-  if (!user) { document.getElementById('loginError').style.display = 'block'; return; }
+  if (!user) {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginLoadingError').style.display = 'none';
+    return;
+  }
   currentUser = user;
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('loginLoadingError').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('topbarUser').textContent = user.name + ' (' + user.role + ')';
-  // Staff는 Settings 메뉴 숨김 (Admin, Manager만 표시)
   document.getElementById('nav-settings').style.display = (user.role === 'Admin' || user.role === 'Manager') ? 'flex' : 'none';
-  // Excel Export는 Admin만
   document.getElementById('exportExcelBtn').style.display = user.role === 'Admin' ? 'inline-flex' : 'none';
   refreshAll(); showPage('dashboard');
 }
@@ -814,7 +787,6 @@ function doLogout() {
 
 // ── NAVIGATION ──
 function showPage(name) {
-  // Staff는 Settings 접근 불가 (Admin, Manager만 가능)
   if (name === 'settings' && currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
     alert('관리자만 접근 가능합니다.'); return;
   }
@@ -839,22 +811,14 @@ function refreshAll() {
   badge.textContent = cnt; badge.style.display = cnt > 0 ? 'inline-block' : 'none';
 }
 
-// ── 문서 열람 권한 체크 ──
 function canViewDoc(doc) {
-  // Admin은 모든 문서 열람 가능
   if (currentUser.role === 'Admin') return true;
-  // 작성자
   if (doc.requesterId === currentUser.id) return true;
-  // 결재자
   if ((doc.approvers || []).some(a => a.id === currentUser.id)) return true;
-  // 참조자
   if ((doc.cc || []).some(c => c === currentUser.id)) return true;
   return false;
 }
-
-function getVisibleDocs() {
-  return docs.filter(d => canViewDoc(d));
-}
+function getVisibleDocs() { return docs.filter(d => canViewDoc(d)); }
 
 function refreshPage(name) {
   const visible = getVisibleDocs();
@@ -863,7 +827,7 @@ function refreshPage(name) {
   if (name === 'pending') renderTable('pendingTable', visible.filter(d => isMyTurn(d)), 'pending');
   if (name === 'all') renderTable('allTable', visible, 'all');
   if (name === 'users') renderUsers();
-  if (name === 'new') { buildApproverLine(); buildCcLine(); setTimeout(()=>{ const t=document.getElementById('docTitle'); if(t) t.focus(); },100); }
+  if (name === 'new') { buildApproverLine(); buildCcLine(); setTimeout(() => { const t = document.getElementById('docTitle'); if(t) t.focus(); }, 100); }
   if (name === 'settings') loadEmailSettings();
 }
 
@@ -874,7 +838,7 @@ function renderDashboard() {
   document.getElementById('stat-pending').textContent = visible.filter(d => d.status === 'pending').length;
   document.getElementById('stat-approved').textContent = visible.filter(d => d.status === 'approved').length;
   document.getElementById('stat-rejected').textContent = visible.filter(d => d.status === 'rejected').length;
-  renderTable('recentTable', [...visible].sort((a,b)=>b.createdAt-a.createdAt).slice(0,8), 'all');
+  renderTable('recentTable', [...visible].sort((a,b) => b.createdAt - a.createdAt).slice(0, 8), 'all');
 }
 
 // ── PROGRESS ──
@@ -896,13 +860,13 @@ function progressHtml(doc) {
 function statusBadge(s) {
   return `<span class="status-badge status-${s}">${{pending:'Pending',approved:'Approved',rejected:'Rejected',draft:'Draft'}[s]||s}</span>`;
 }
-function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}); }
-function getUserName(id) { const u = users.find(u=>u.id===id); return u ? u.name : id; }
+function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-US', {year:'numeric', month:'short', day:'numeric'}); }
+function getUserName(id) { const u = users.find(u => u.id === id); return u ? u.name : id; }
 
 function renderTable(tbodyId, data, mode) {
   const tb = document.getElementById(tbodyId); if (!tb) return;
   if (!data.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="9">No documents found.</td></tr>'; return; }
-  tb.innerHTML = [...data].sort((a,b)=>b.createdAt-a.createdAt).map(doc => {
+  tb.innerHTML = [...data].sort((a,b) => b.createdAt - a.createdAt).map(doc => {
     const actions = buildActions(doc, mode);
     const prog = progressHtml(doc);
     if (mode === 'pending') {
@@ -933,10 +897,8 @@ function buildActions(doc, mode) {
     b += `<button class="btn-sm" style="background:var(--green);color:white;margin-right:2px" onclick="openApprove('${doc.id}','approve')">Approve</button>`;
     b += `<button class="btn-sm" style="background:var(--red);color:white" onclick="openApprove('${doc.id}','reject')">Reject</button>`;
   }
-  if (mode === 'mine') {
-    if (doc.status === 'draft' || doc.status === 'pending' || doc.status === 'rejected') {
-      b += `<button class="btn-sm btn-sm-outline" onclick="deleteDoc('${doc.id}')">Delete</button>`;
-    }
+  if (mode === 'mine' && (doc.status === 'draft' || doc.status === 'pending' || doc.status === 'rejected')) {
+    b += `<button class="btn-sm btn-sm-outline" onclick="deleteDoc('${doc.id}')">Delete</button>`;
   }
   return b;
 }
@@ -953,13 +915,11 @@ function buildApproverLine() {
   document.getElementById('approverLine').innerHTML = '';
   addApproverRow();
 }
-
 function getApproverOptions(selectedId) {
   return users.filter(u => u.id !== currentUser.id).map(u =>
     `<option value="${u.id}" ${u.id===selectedId?'selected':''}>${u.name} (${u.role})</option>`
   ).join('');
 }
-
 function addApproverRow() {
   const idx = approverRows.length;
   approverRows.push('');
@@ -972,16 +932,12 @@ function addApproverRow() {
     ${idx > 0 ? `<button class="btn-remove-approver" onclick="removeApproverRow(${idx})">✕</button>` : ''}`;
   document.getElementById('approverLine').appendChild(row);
 }
-
 function removeApproverRow(idx) {
   approverRows.splice(idx, 1);
-  const saved = [...approverRows];
-  approverRows = [];
-  const line = document.getElementById('approverLine');
-  line.innerHTML = '';
+  const saved = [...approverRows]; approverRows = [];
+  const line = document.getElementById('approverLine'); line.innerHTML = '';
   saved.forEach((val, i) => {
-    const ni = approverRows.length;
-    approverRows.push(val);
+    const ni = approverRows.length; approverRows.push(val);
     const row = document.createElement('div');
     row.className = 'approver-row'; row.id = 'ar-' + ni;
     row.innerHTML = `<span class="approver-step-num">${ni+1}</span>
@@ -993,15 +949,10 @@ function removeApproverRow(idx) {
   });
 }
 
-// ── CC (참조자) LINE ──
-function buildCcLine() {
-  ccRows = [];
-  document.getElementById('ccLine').innerHTML = '';
-}
-
+// ── CC LINE ──
+function buildCcLine() { ccRows = []; document.getElementById('ccLine').innerHTML = ''; }
 function addCcRow() {
-  const idx = ccRows.length;
-  ccRows.push('');
+  const idx = ccRows.length; ccRows.push('');
   const row = document.createElement('div');
   row.className = 'approver-row'; row.id = 'cc-' + idx;
   row.innerHTML = `<span class="approver-step-num" style="color:var(--mid)">CC</span>
@@ -1011,13 +962,10 @@ function addCcRow() {
     <button class="btn-remove-approver" onclick="removeCcRow(${idx})">✕</button>`;
   document.getElementById('ccLine').appendChild(row);
 }
-
 function removeCcRow(idx) {
   ccRows.splice(idx, 1);
-  const saved = [...ccRows];
-  ccRows = [];
-  const line = document.getElementById('ccLine');
-  line.innerHTML = '';
+  const saved = [...ccRows]; ccRows = [];
+  const line = document.getElementById('ccLine'); line.innerHTML = '';
   saved.forEach((val, i) => {
     ccRows.push(val);
     const row = document.createElement('div');
@@ -1031,44 +979,6 @@ function removeCcRow(idx) {
   });
 }
 
-// ── FILE SIZE CHECK ──
-function checkFileSize(input) {
-  const warning = document.getElementById('fileSizeWarning');
-  const ok = document.getElementById('fileSizeOk');
-  warning.style.display = 'none';
-  ok.style.display = 'none';
-
-  const files = Array.from(input.files);
-  if (!files.length) return;
-
-  const MAX_PER_FILE = 3 * 1024 * 1024;   // 3MB per file
-  const MAX_TOTAL    = 5 * 1024 * 1024;   // 5MB total
-
-  let errors = [];
-  let totalSize = 0;
-
-  files.forEach(f => {
-    totalSize += f.size;
-    if (f.size > MAX_PER_FILE) {
-      errors.push(`⚠ "${f.name}" (${(f.size/1024/1024).toFixed(1)}MB) — 파일당 최대 3MB를 초과했습니다.`);
-    }
-  });
-
-  if (totalSize > MAX_TOTAL) {
-    errors.push(`⚠ 전체 파일 합계 ${(totalSize/1024/1024).toFixed(1)}MB — 총 5MB를 초과했습니다.`);
-  }
-
-  if (errors.length > 0) {
-    warning.innerHTML = errors.join('<br>') + '<br><strong>해당 파일을 제거하고 다시 선택해 주세요.</strong>';
-    warning.style.display = 'block';
-    input.value = ''; // 파일 선택 초기화
-  } else {
-    const totalMB = (totalSize/1024/1024).toFixed(2);
-    ok.innerHTML = `✓ ${files.length}개 파일 선택됨 — 전체 ${totalMB}MB (정상)`;
-    ok.style.display = 'block';
-  }
-}
-
 // ── SUBMIT ──
 function submitDoc(status) {
   const type = document.getElementById('docType').value;
@@ -1077,71 +987,50 @@ function submitDoc(status) {
   const priority = document.getElementById('docPriority').value;
   const selApprovers = approverRows.filter(id => id);
   const selCc = ccRows.filter(id => id);
-
   if (status === 'pending') {
     if (!type || !title || !content) { alert('Please fill in all required fields.'); return; }
     if (!selApprovers.length) { alert('Please add at least one approver.'); return; }
-    if (new Set(selApprovers).size !== selApprovers.length) { alert('Duplicate approvers found. Each approver must be unique.'); return; }
-    // 결재자와 참조자 중복 체크
+    if (new Set(selApprovers).size !== selApprovers.length) { alert('Duplicate approvers found.'); return; }
     const overlap = selCc.filter(c => selApprovers.includes(c));
-    if (overlap.length) { alert('결재자와 참조자에 동일인이 있습니다. 확인해 주세요.'); return; }
+    if (overlap.length) { alert('결재자와 참조자에 동일인이 있습니다.'); return; }
   } else {
     if (!title) { alert('Please enter a title.'); return; }
   }
-
   docCounter++;
-  const docNo = 'RSI-' + String(docCounter).padStart(4,'0');
+  const docNo = 'RSI-' + String(docCounter).padStart(4, '0');
   const approversData = selApprovers.map(id => ({ id, status:'pending', comment:'', at:null }));
   const docData = {
     id: 'doc_' + Date.now(), docNo, type, title,
-    approvers: approversData,
-    cc: selCc, // 참조자 ID 배열
+    approvers: approversData, cc: selCc,
     approverId: selApprovers[0] || '',
     requesterId: currentUser.id, content, priority, status,
     currentStep: 0, createdAt: Date.now(),
     history: [{ action: status==='draft'?'draft':'submitted', by: currentUser.id, at: Date.now(), comment:'' }],
     attachments: [...onedriveLinks]
   };
-
   saveDoc(docData).then(() => {
     saveData();
     ['docType','docTitle','docContent'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('docPriority').value = 'Normal';
-    onedriveLinks = [];
-    renderOnedriveLinkList();
-    buildApproverLine();
-    buildCcLine();
+    onedriveLinks = []; renderOnedriveLinkList();
+    buildApproverLine(); buildCcLine();
     if (status === 'pending' && approversData.length > 0) sendEmail(approversData[0].id, docData, 'submitted', '');
     if (status === 'pending') sendCcEmails(docData, 'cc_submitted', '');
-    alert(status==='draft' ? '✓ Saved as draft.' : '✓ Submitted! Email sent to first approver.');
+    alert(status==='draft' ? '✓ Saved as draft.' : '✓ Submitted!');
     showPage('mine');
-  });
+  }).catch(e => alert('저장 오류: ' + e.message));
 }
 
 // ── VIEW ──
 function viewDoc(docId) {
-  const doc = docs.find(d=>d.id===docId); if (!doc) return;
+  const doc = docs.find(d => d.id === docId); if (!doc) return;
   currentDocId = docId;
   document.getElementById('modalTitle').textContent = doc.docNo + ' — ' + doc.title;
-
   const fileHtml = doc.attachments && doc.attachments.length
-    ? doc.attachments.map(f => {
-        if (f.url) {
-          // OneDrive 링크
-          return `<div class="file-item">
-            📄 <a href="${f.url}" target="_blank" style="color:var(--accent);font-size:0.85rem;">${f.name}</a>
-            <span style="color:var(--mid);font-size:0.75rem;margin-left:8px">OneDrive</span>
-          </div>`;
-        } else if (f.data && f.data.length > 10) {
-          return `<div class="file-item">
-            📎 <span style="color:var(--light)">${f.name}</span>
-            <span style="color:var(--mid)">(${(f.size/1024).toFixed(1)} KB)</span>
-            <button class="btn-sm btn-sm-accent" style="margin-left:8px" onclick="downloadFile('${doc.id}','${f.name}')">⬇ Download</button>
-          </div>`;
-        } else {
-          return `<div class="file-item">📎 <span style="color:var(--mid)">${f.name} (파일 데이터 없음)</span></div>`;
-        }
-      }).join('')
+    ? doc.attachments.map(f => f.url
+        ? `<div class="file-item">📄 <a href="${f.url}" target="_blank">${f.name}</a> <span style="color:var(--mid);font-size:0.75rem;">OneDrive</span></div>`
+        : `<div class="file-item">📎 <span>${f.name}</span></div>`
+      ).join('')
     : '<span style="color:var(--mid);font-size:0.85rem;">No attachments</span>';
 
   const historyHtml = doc.history.map(h => {
@@ -1152,7 +1041,7 @@ function viewDoc(docId) {
     </div></div>`;
   }).join('');
 
-  const approverDetail = (doc.approvers||[]).map((a,i) =>
+  const approverDetail = (doc.approvers||[]).map((a, i) =>
     `<div style="font-size:0.82rem;color:var(--light);display:flex;gap:1rem;align-items:center;padding:0.3rem 0;flex-wrap:wrap;">
       <span style="color:var(--accent);min-width:55px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">STEP ${i+1}</span>
       <span>${getUserName(a.id)}</span>
@@ -1168,9 +1057,7 @@ function viewDoc(docId) {
     <div class="detail-row"><div class="detail-label">Priority</div><div class="detail-value">${doc.priority}</div></div>
     <div class="detail-row"><div class="detail-label">Requester</div><div class="detail-value">${getUserName(doc.requesterId)}</div></div>
     <div class="detail-row" style="flex-direction:column;gap:0.8rem;">
-      <div class="detail-label">Approval Line (순차 결재)</div>
-      ${progressHtml(doc)}
-      ${approverDetail}
+      <div class="detail-label">Approval Line</div>${progressHtml(doc)}${approverDetail}
     </div>
     <div class="detail-row"><div class="detail-label">CC / 참조자</div><div class="detail-value">${
       doc.cc && doc.cc.length ? doc.cc.map(id => getUserName(id)).join(', ') : '<span style="color:var(--mid)">없음</span>'
@@ -1184,8 +1071,7 @@ function viewDoc(docId) {
       <div class="detail-label">Attachments</div><div>${fileHtml}</div>
     </div>
     <div style="margin-top:1.5rem;">
-      <div class="detail-label" style="margin-bottom:0.8rem;">History</div>
-      ${historyHtml}
+      <div class="detail-label" style="margin-bottom:0.8rem;">History</div>${historyHtml}
     </div>`;
 
   let footer = '<button class="btn btn-outline" onclick="closeModal(\'detailModal\')">Close</button>';
@@ -1196,20 +1082,6 @@ function viewDoc(docId) {
   }
   document.getElementById('modalFooter').innerHTML = footer;
   document.getElementById('detailModal').classList.add('open');
-}
-
-// ── DOWNLOAD FILE ──
-function downloadFile(docId, fileName) {
-  const doc = docs.find(d => d.id === docId);
-  if (!doc) return;
-  const file = doc.attachments.find(f => f.name === fileName);
-  if (!file || !file.data) { alert('File data not available.'); return; }
-  const a = document.createElement('a');
-  a.href = file.data;
-  a.download = file.name;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
 }
 
 // ── APPROVE / REJECT ──
@@ -1224,17 +1096,14 @@ function openApprove(docId, action) {
     </button>`;
   document.getElementById('approveModal').classList.add('open');
 }
-
 async function doApprove(action) {
-  const doc = docs.find(d=>d.id===currentDocId); if (!doc) return;
+  const doc = docs.find(d => d.id === currentDocId); if (!doc) return;
   const comment = document.getElementById('approveComment').value.trim();
   const step = doc.currentStep || 0;
-
   doc.approvers[step].status = action === 'approve' ? 'approved' : 'rejected';
   doc.approvers[step].comment = comment;
   doc.approvers[step].at = Date.now();
   doc.history.push({ action: action==='approve'?'approved':'rejected', by: currentUser.id, at: Date.now(), comment });
-
   if (action === 'reject') {
     doc.status = 'rejected';
     sendEmail(doc.requesterId, doc, 'rejected', comment);
@@ -1242,35 +1111,26 @@ async function doApprove(action) {
   } else {
     const next = step + 1;
     if (next >= doc.approvers.length) {
-      // 전체 결재 완료
       doc.status = 'approved';
       sendEmail(doc.requesterId, doc, 'approved', comment);
       sendCcEmails(doc, 'cc_approved', comment);
     } else {
-      // 다음 결재자로 전달
       doc.currentStep = next;
       doc.approvers[next].status = 'pending';
       sendEmail(doc.approvers[next].id, doc, 'step_approved', '');
       sendEmail(doc.requesterId, doc, 'step_approved', comment);
     }
   }
-
-  await saveDoc(doc);
-  saveData();
+  await saveDoc(doc); saveData();
   closeModal('approveModal');
   const stepNum = step;
-  if (action === 'approve' && doc.status === 'approved') alert('✓ All steps approved! Document fully approved.');
+  if (action === 'approve' && doc.status === 'approved') alert('✓ All steps approved!');
   else if (action === 'approve') alert('✓ Step ' + (stepNum+1) + ' approved. Forwarded to Step ' + (stepNum+2) + '.');
   else alert('✕ Document rejected.');
 }
-
 async function deleteDoc(docId) {
-  const doc = docs.find(d=>d.id===docId);
-  if (!doc) return;
-  const msg = doc.status === 'pending'
-    ? '진행 중인 결재 문서를 삭제하시겠습니까?\n결재자에게 취소 알림이 가지 않습니다.'
-    : '이 문서를 삭제하시겠습니까?';
-  if (!confirm(msg)) return;
+  const doc = docs.find(d => d.id === docId); if (!doc) return;
+  if (!confirm('이 문서를 삭제하시겠습니까?')) return;
   await removeDoc(docId);
   alert('✓ 문서가 삭제됐습니다.');
 }
@@ -1278,10 +1138,8 @@ async function deleteDoc(docId) {
 // ── USERS ──
 function renderUsers() {
   const isAdminOrMgr = (currentUser.role === 'Admin' || currentUser.role === 'Manager');
-  // Add User 버튼 Admin/Manager만 표시
   const addBtn = document.getElementById('addUserBtn');
   if (addBtn) addBtn.style.display = isAdminOrMgr ? 'inline-flex' : 'none';
-  // Staff는 본인만 표시, Admin/Manager는 전체 표시
   const visibleUsers = isAdminOrMgr ? users : users.filter(u => u.id === currentUser.id);
   document.getElementById('userList').innerHTML = visibleUsers.map(u => `
     <div class="user-card">
@@ -1305,18 +1163,14 @@ function renderUsers() {
 
 function openEditUser(id) {
   const isAdminOrMgr = (currentUser.role === 'Admin' || currentUser.role === 'Manager');
-  // Staff는 본인만 수정 가능
-  if (!isAdminOrMgr && id !== currentUser.id) {
-    alert('본인 정보만 수정 가능합니다.'); return;
-  }
-  const u = users.find(u=>u.id===id); if (!u) return;
+  if (!isAdminOrMgr && id !== currentUser.id) { alert('본인 정보만 수정 가능합니다.'); return; }
+  const u = users.find(u => u.id === id); if (!u) return;
   document.getElementById('editUserId').value = u.id;
   document.getElementById('editUserName').value = u.name;
   document.getElementById('editUserEmail').value = u.email || '';
   document.getElementById('editUserPw').value = '';
   document.getElementById('editUserPwConfirm').value = '';
   document.getElementById('editUserRole').value = u.role;
-  // Staff는 Role 변경 불가
   document.getElementById('editUserRole').disabled = !isAdminOrMgr;
   document.getElementById('editUserModal').classList.add('open');
 }
@@ -1330,21 +1184,30 @@ function saveEditUser() {
   const role = document.getElementById('editUserRole').value;
   if (!name) { alert('Please enter a name.'); return; }
   if (pw && pw !== pwConfirm) { alert('비밀번호가 일치하지 않습니다.'); return; }
-  const u = users.find(u=>u.id===id); if (!u) return;
-  u.name = name; u.email = email; u.role = role;
-  if (pw) u.pw = pw;
-  // Firebase에 저장
-  db.collection('users').doc(id).set(u).then(() => {
+  if (pw && pw.length < 6) { alert('비밀번호는 6자 이상이어야 합니다.'); return; }
+
+  // ✅ 수정 4: Firebase에서 현재 데이터를 가져온 후 업데이트 (로컬 캐시 의존 제거)
+  db.collection('users').doc(id).get().then(docSnap => {
+    if (!docSnap.exists) { alert('사용자를 찾을 수 없습니다.'); return; }
+    const currentData = docSnap.data();
+    const updatedData = {
+      ...currentData,
+      name: name,
+      email: email,
+      role: role,
+      pw: pw ? pw : currentData.pw  // 비밀번호 입력 없으면 기존 비밀번호 유지
+    };
+    return db.collection('users').doc(id).set(updatedData);
+  }).then(() => {
     if (id === currentUser.id) {
-      currentUser.name = name; currentUser.role = role;
-      document.getElementById('topbarUser').textContent = name+' ('+role+')';
+      document.getElementById('topbarUser').textContent = name + ' (' + role + ')';
     }
-    closeModal('editUserModal'); renderUsers(); alert('✓ User updated!');
+    closeModal('editUserModal');
+    alert('✓ 저장되었습니다!');
   }).catch(e => alert('저장 오류: ' + e.message));
 }
 
 function openAddUser() { document.getElementById('userModal').classList.add('open'); }
-
 function addUser() {
   const name = document.getElementById('newUserName').value.trim();
   const id = document.getElementById('newUserId').value.trim();
@@ -1352,21 +1215,16 @@ function addUser() {
   const pw = document.getElementById('newUserPw').value;
   const role = document.getElementById('newUserRole').value;
   if (!name || !id || !pw) { alert('Please fill in required fields.'); return; }
-  if (users.find(u=>u.id===id)) { alert('User ID already exists.'); return; }
-  const newUser = { id, name, pw, role, email };
-  // Firebase에 저장
-  db.collection('users').doc(id).set(newUser).then(() => {
+  if (users.find(u => u.id === id)) { alert('User ID already exists.'); return; }
+  db.collection('users').doc(id).set({ id, name, pw, role, email }).then(() => {
     closeModal('userModal');
-    ['newUserName','newUserId','newUserEmail','newUserPw'].forEach(i => document.getElementById(i).value='');
+    ['newUserName','newUserId','newUserEmail','newUserPw'].forEach(i => document.getElementById(i).value = '');
     alert('✓ User added!');
   }).catch(e => alert('저장 오류: ' + e.message));
 }
-
 function removeUser(id) {
   if (!confirm('Remove this user?')) return;
-  db.collection('users').doc(id).delete().then(() => {
-    alert('✓ User removed!');
-  }).catch(e => alert('삭제 오류: ' + e.message));
+  db.collection('users').doc(id).delete().then(() => alert('✓ User removed!')).catch(e => alert('삭제 오류: ' + e.message));
 }
 
 // ── SETTINGS ──
@@ -1375,10 +1233,9 @@ function loadEmailSettings() {
   document.getElementById('ejsServiceId').value = emailCfg.serviceId || '';
   document.getElementById('ejsTemplateId').value = emailCfg.templateId || '';
 }
-
 function saveEmailSettings() {
-  emailCfg.publicKey  = document.getElementById('ejsPublicKey').value.trim();
-  emailCfg.serviceId  = document.getElementById('ejsServiceId').value.trim();
+  emailCfg.publicKey = document.getElementById('ejsPublicKey').value.trim();
+  emailCfg.serviceId = document.getElementById('ejsServiceId').value.trim();
   emailCfg.templateId = document.getElementById('ejsTemplateId').value.trim();
   saveEmailCfg();
   if (emailCfg.publicKey) { try { emailjs.init(emailCfg.publicKey); } catch(e){} }
@@ -1386,10 +1243,9 @@ function saveEmailSettings() {
   s.textContent = '✓ Saved!'; s.style.color = 'var(--green)';
   setTimeout(() => s.textContent = '', 3000);
 }
-
 async function testEmail() {
   if (!emailCfg.publicKey) { alert('Please save EmailJS settings first.'); return; }
-  const me = users.find(u=>u.id===currentUser.id);
+  const me = users.find(u => u.id === currentUser.id);
   if (!me || !me.email) { alert('Please set your email address in Users page first.'); return; }
   const s = document.getElementById('emailSettingStatus');
   s.textContent = 'Sending...'; s.style.color = 'var(--accent)';
@@ -1416,34 +1272,20 @@ function exportToExcel() {
   if (!docs.length) { alert('내보낼 문서가 없습니다.'); return; }
   const data = docs.map(d => {
     const requester = users.find(u => u.id === d.requesterId);
-    const approverNames = (d.approvers || []).map((a, i) => {
+    const approverNames = (d.approvers||[]).map((a, i) => {
       const u = users.find(u => u.id === a.id);
-      const name = u ? u.name : a.id;
-      const status = a.status === 'approved' ? '✓승인' : a.status === 'rejected' ? '✕반려' : '대기';
-      return `Step${i+1}: ${name} (${status})`;
+      return `Step${i+1}: ${u?u.name:a.id} (${a.status==='approved'?'✓승인':a.status==='rejected'?'✕반려':'대기'})`;
     }).join(' → ');
-    const files = (d.files || []).map(f => f.name || f.url).join(', ');
-    const ccNames = (d.cc || []).map(id => getUserName(id)).join(', ');
     return {
-      '문서번호': d.docNo || '',
-      '제목': d.title || '',
-      '종류': d.type || '',
-      '우선순위': d.priority || '',
-      '요청자': requester ? requester.name : d.requesterId,
-      '상태': d.status === 'approved' ? '승인' : d.status === 'rejected' ? '반려' : d.status === 'pending' ? '대기' : d.status,
-      '결재라인': approverNames,
-      '참조자': ccNames || '없음',
-      '내용': d.content || '',
-      '첨부파일': files,
-      '작성일': d.createdAt ? new Date(d.createdAt).toLocaleDateString('ko-KR') : '',
-      '완료일': d.completedAt ? new Date(d.completedAt).toLocaleDateString('ko-KR') : ''
+      '문서번호': d.docNo||'', '제목': d.title||'', '종류': d.type||'', '우선순위': d.priority||'',
+      '요청자': requester?requester.name:d.requesterId,
+      '상태': d.status==='approved'?'승인':d.status==='rejected'?'반려':d.status==='pending'?'대기':d.status,
+      '결재라인': approverNames, '참조자': (d.cc||[]).map(id=>getUserName(id)).join(', ')||'없음',
+      '내용': d.content||'', '작성일': d.createdAt?new Date(d.createdAt).toLocaleDateString('ko-KR'):''
     };
   });
   const ws = XLSX.utils.json_to_sheet(data);
-  // 컬럼 너비 자동 조절
-  ws['!cols'] = [
-    {wch:14},{wch:30},{wch:12},{wch:10},{wch:16},{wch:8},{wch:40},{wch:20},{wch:40},{wch:40},{wch:14},{wch:14}
-  ];
+  ws['!cols'] = [{wch:14},{wch:30},{wch:12},{wch:10},{wch:16},{wch:8},{wch:40},{wch:20},{wch:40},{wch:14}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Approval Documents');
   XLSX.writeFile(wb, 'approval_documents_' + new Date().toISOString().slice(0,10) + '.xlsx');
