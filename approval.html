@@ -668,12 +668,12 @@ async function uploadFiles() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('http://routesystem.synology.me:8081/upload', {
+      const res = await fetch('https://routesystem-nas.tail66c283.ts.net/upload', {
         method: 'POST',
         body: formData
       });
       const data = await res.json();
-      uploadedFiles.push({ name: file.name, url: `http://routesystem.synology.me:8081${data.url}` });
+      uploadedFiles.push({ name: file.name, url: `https://routesystem-nas.tail66c283.ts.net${data.url}` });
       renderFileList();
     } catch(e) {
       alert('업로드 실패: ' + file.name);
