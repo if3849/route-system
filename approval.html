@@ -362,7 +362,7 @@
     <div class="topbar-logo"><a href="index.html">ROUTE <span>SYSTEM</span></a> — APPROVAL</div>
     <div class="topbar-right">
       <div class="topbar-user"><div class="user-dot"></div><span id="topbarUser">—</span></div>
-      <div class="topbar-logout" onclick="backToHub()">&#127968; Home</div>
+      <div class="topbar-logout" onclick="backToHub()" style="background:var(--accent);color:var(--black);border-color:var(--accent);font-weight:600;padding:8px 20px;font-size:0.85rem">&#127968; HOME</div>
       <div class="topbar-logout" onclick="doLogout()">Logout</div>
     </div>
   </div>
@@ -872,6 +872,7 @@ function doLogin() {
   // 허브 화면 표시
   document.getElementById('hubScreen').style.display = 'flex';
   document.getElementById('hubUser').textContent = user.name + ' (' + user.role + ')';
+  history.replaceState({screen:'hub'}, '', '');
 }
 function enterApproval() {
   document.getElementById('hubScreen').style.display = 'none';
@@ -879,12 +880,28 @@ function enterApproval() {
   document.getElementById('topbarUser').textContent = currentUser.name + ' (' + currentUser.role + ')';
   document.getElementById('nav-settings').style.display = (currentUser.role === 'Admin' || currentUser.role === 'Manager') ? 'flex' : 'none';
   document.getElementById('exportExcelBtn').style.display = currentUser.role === 'Admin' ? 'inline-flex' : 'none';
+  history.pushState({screen:'approval'}, '', '');
   refreshAll(); showPage('dashboard');
 }
 function backToHub() {
   document.getElementById('app').style.display = 'none';
   document.getElementById('hubScreen').style.display = 'flex';
+  history.replaceState({screen:'hub'}, '', '');
 }
+// 뒤로가기 버튼 처리
+window.addEventListener('popstate', function(e) {
+  if (!currentUser) return;
+  var state = e.state;
+  if (document.getElementById('app').style.display === 'block') {
+    // 전자결재에서 뒤로가기 → 허브로
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('hubScreen').style.display = 'flex';
+    history.replaceState({screen:'hub'}, '', '');
+  } else if (document.getElementById('hubScreen').style.display === 'flex') {
+    // 허브에서 뒤로가기 → 허브 유지 (홈페이지로 안 나감)
+    history.pushState({screen:'hub'}, '', '');
+  }
+});
 function doLogout() {
   currentUser = null;
   editingDocId = null;
