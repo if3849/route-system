@@ -56,6 +56,72 @@
       letter-spacing:1px;
     }
 
+    /* ── Hub Screen ── */
+    #hubScreen {
+      display:none; min-height:100vh;
+      background: var(--black);
+      background-image: repeating-linear-gradient(0deg, transparent, transparent 79px, rgba(255,255,255,0.015) 80px),
+                         repeating-linear-gradient(90deg, transparent, transparent 79px, rgba(255,255,255,0.015) 80px);
+      flex-direction:column; align-items:center; justify-content:center;
+    }
+    .hub-topbar {
+      position:fixed; top:0; left:0; right:0; height:60px; z-index:100;
+      background:rgba(10,10,10,0.95); border-bottom:1px solid rgba(200,169,110,0.15);
+      display:flex; align-items:center; justify-content:space-between; padding:0 2rem;
+      backdrop-filter:blur(8px);
+    }
+    .hub-topbar-logo { font-family:'Bebas Neue',sans-serif; font-size:1.3rem; letter-spacing:3px; }
+    .hub-topbar-logo span { color:var(--accent); }
+    .hub-topbar-right { display:flex; align-items:center; gap:1.2rem; }
+    .hub-topbar-user { font-family:'Barlow Condensed',sans-serif; font-size:0.85rem; letter-spacing:1px; color:var(--mid); }
+    .hub-topbar-logout { font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; color:var(--accent); cursor:pointer; padding:6px 16px; border:1px solid var(--gray); transition:all 0.2s; }
+    .hub-topbar-logout:hover { border-color:var(--accent); background:rgba(200,169,110,0.1); }
+    .hub-content { text-align:center; margin-top:60px; padding:60px 20px; }
+    .hub-logo { font-family:'Bebas Neue',sans-serif; font-size:2.8rem; letter-spacing:6px; margin-bottom:0.3rem; }
+    .hub-logo span { color:var(--accent); }
+    .hub-subtitle { font-family:'Barlow Condensed',sans-serif; font-size:0.8rem; letter-spacing:4px; text-transform:uppercase; color:var(--mid); margin-bottom:3.5rem; }
+    .hub-cards { display:flex; gap:2rem; justify-content:center; flex-wrap:wrap; }
+    .hub-card {
+      background: var(--dark);
+      border:1px solid var(--gray);
+      width:280px; padding:3rem 2rem 2.5rem;
+      cursor:pointer; position:relative; overflow:hidden;
+      transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    .hub-card::before {
+      content:''; position:absolute; top:-1px; left:30px; width:60px; height:3px;
+      background:var(--accent); transition:width 0.3s;
+    }
+    .hub-card:hover {
+      transform: translateY(-10px);
+      border-color: var(--accent);
+      box-shadow: 0 20px 60px rgba(200,169,110,0.12), 0 0 30px rgba(200,169,110,0.06);
+    }
+    .hub-card:hover::before { width:calc(100% - 60px); }
+    .hub-card-icon { font-size:3rem; margin-bottom:1.2rem; display:block; }
+    .hub-card-title {
+      font-family:'Bebas Neue',sans-serif; font-size:1.4rem; letter-spacing:3px;
+      margin-bottom:0.5rem;
+    }
+    .hub-card-desc {
+      font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; letter-spacing:2px;
+      text-transform:uppercase; color:var(--mid); line-height:1.6;
+    }
+    .hub-card-arrow {
+      position:absolute; bottom:1.2rem; right:1.2rem;
+      font-size:1.2rem; color:var(--gray); transition:all 0.3s;
+    }
+    .hub-card:hover .hub-card-arrow { color:var(--accent); transform:translateX(4px); }
+    .hub-footer {
+      margin-top:3rem; font-size:0.7rem; color:var(--gray);
+      font-family:'Barlow Condensed',sans-serif; letter-spacing:2px; text-transform:uppercase;
+    }
+    @media (max-width:680px) {
+      .hub-cards { flex-direction:column; align-items:center; }
+      .hub-card { width:100%; max-width:320px; }
+      .hub-logo { font-size:2rem; }
+    }
+
     #app { display:none; min-height:100vh; }
     .topbar { position:fixed; top:0; left:0; right:0; z-index:100; height:60px; background:rgba(10,10,10,0.97); border-bottom:1px solid rgba(200,169,110,0.2); display:flex; align-items:center; justify-content:space-between; padding:0 1.5rem; backdrop-filter:blur(8px); }
     .topbar-logo { font-family:'Bebas Neue',sans-serif; font-size:1.3rem; letter-spacing:3px; }
@@ -254,12 +320,49 @@
   </div>
 </div>
 
+<!-- HUB SCREEN -->
+<div id="hubScreen">
+  <div class="hub-topbar">
+    <div class="hub-topbar-logo">ROUTE <span>SYSTEM</span></div>
+    <div class="hub-topbar-right">
+      <div class="hub-topbar-user" id="hubUser">—</div>
+      <div class="hub-topbar-logout" onclick="doLogout()">Logout</div>
+    </div>
+  </div>
+  <div class="hub-content">
+    <div class="hub-logo">ROUTE <span>SYSTEM</span></div>
+    <div class="hub-subtitle">Integrated Staff Portal</div>
+    <div class="hub-cards">
+      <div class="hub-card" onclick="enterApproval()">
+        <span class="hub-card-icon">&#128221;</span>
+        <div class="hub-card-title">Approval</div>
+        <div class="hub-card-desc">Document Approval &amp; Workflow</div>
+        <span class="hub-card-arrow">&#8594;</span>
+      </div>
+      <div class="hub-card" onclick="window.open('http://98.167.239.190:3000','_blank')">
+        <span class="hub-card-icon">&#127959;</span>
+        <div class="hub-card-title">Daily Log</div>
+        <div class="hub-card-desc">Construction Daily Report</div>
+        <span class="hub-card-arrow">&#8594;</span>
+      </div>
+      <div class="hub-card" onclick="window.open('http://routesystem.synology.me:8080','_blank')">
+        <span class="hub-card-icon">&#128230;</span>
+        <div class="hub-card-title">Asset</div>
+        <div class="hub-card-desc">Asset Management System</div>
+        <span class="hub-card-arrow">&#8594;</span>
+      </div>
+    </div>
+    <div class="hub-footer">Route System Inc. &mdash; Staff Portal</div>
+  </div>
+</div>
+
 <!-- APP -->
 <div id="app">
   <div class="topbar">
     <div class="topbar-logo"><a href="index.html">ROUTE <span>SYSTEM</span></a> — APPROVAL</div>
     <div class="topbar-right">
       <div class="topbar-user"><div class="user-dot"></div><span id="topbarUser">—</span></div>
+      <div class="topbar-logout" onclick="backToHub()">&#127968; Home</div>
       <div class="topbar-logout" onclick="doLogout()">Logout</div>
     </div>
   </div>
@@ -766,16 +869,27 @@ function doLogin() {
   document.getElementById('loginError').style.display = 'none';
   document.getElementById('loginLoadingError').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'none';
+  // 허브 화면 표시
+  document.getElementById('hubScreen').style.display = 'flex';
+  document.getElementById('hubUser').textContent = user.name + ' (' + user.role + ')';
+}
+function enterApproval() {
+  document.getElementById('hubScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  document.getElementById('topbarUser').textContent = user.name + ' (' + user.role + ')';
-  document.getElementById('nav-settings').style.display = (user.role === 'Admin' || user.role === 'Manager') ? 'flex' : 'none';
-  document.getElementById('exportExcelBtn').style.display = user.role === 'Admin' ? 'inline-flex' : 'none';
+  document.getElementById('topbarUser').textContent = currentUser.name + ' (' + currentUser.role + ')';
+  document.getElementById('nav-settings').style.display = (currentUser.role === 'Admin' || currentUser.role === 'Manager') ? 'flex' : 'none';
+  document.getElementById('exportExcelBtn').style.display = currentUser.role === 'Admin' ? 'inline-flex' : 'none';
   refreshAll(); showPage('dashboard');
+}
+function backToHub() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('hubScreen').style.display = 'flex';
 }
 function doLogout() {
   currentUser = null;
   editingDocId = null;
   document.getElementById('app').style.display = 'none';
+  document.getElementById('hubScreen').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginId').value = '';
   document.getElementById('loginPw').value = '';
