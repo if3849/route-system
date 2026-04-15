@@ -346,7 +346,7 @@
         <div class="hub-card-desc">Construction Field Report</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
-      <div class="hub-card" onclick="window.open('http://routesystem.synology.me:8080','_blank')">
+      <div class="hub-card" onclick="enterAsset()">
         <span class="hub-card-icon">&#128230;</span>
         <div class="hub-card-title">Asset</div>
         <div class="hub-card-desc">Asset Management System</div>
@@ -881,6 +881,14 @@ async function doLogin() {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('loginLoadingError').style.display = 'none';
   }
+}
+async function enterAsset() {
+  try {
+    const u = firebase.auth().currentUser;
+    if (!u) { alert('세션이 만료되었습니다. 다시 로그인해 주세요.'); return; }
+    const token = await u.getIdToken(true);
+    window.open('http://routesystem.synology.me:8080/sso?token='+encodeURIComponent(token), '_blank');
+  } catch(e) { alert('Asset 접속 실패: '+e.message); }
 }
 async function enterFieldReport() {
   try {
