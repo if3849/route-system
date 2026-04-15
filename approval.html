@@ -9,6 +9,7 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -339,7 +340,7 @@
         <div class="hub-card-desc">Document Approval &amp; Workflow</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
-      <div class="hub-card" onclick="window.open('http://98.167.239.190:3000','_blank')">
+      <div class="hub-card" onclick="enterFieldReport()">
         <span class="hub-card-icon">&#127959;</span>
         <div class="hub-card-title">Field Report</div>
         <div class="hub-card-desc">Construction Field Report</div>
@@ -851,28 +852,43 @@ async function sendCcEmails(doc, action, comment) {
 }
 
 // ── LOGIN / LOGOUT ──
-function doLogin() {
+async function doLogin() {
   if (!usersLoaded) {
     document.getElementById('loginLoadingError').style.display = 'block';
     document.getElementById('loginError').style.display = 'none';
     return;
   }
-  const id = document.getElementById('loginId').value.trim();
+  const idInput = document.getElementById('loginId').value.trim();
   const pw = document.getElementById('loginPw').value;
-  const user = users.find(u => u.id === id && u.pw === pw);
-  if (!user) {
+  let email = idInput;
+  if (!idInput.includes('@')) {
+    const match = users.find(u => u.id === idInput);
+    if (match && match.email) email = match.email;
+  }
+  try {
+    const cred = await firebase.auth().signInWithEmailAndPassword(email, pw);
+    let user = users.find(u => (u.email && u.email.toLowerCase() === email.toLowerCase()) || u.firebase_uid === cred.user.uid);
+    if (!user) user = { id: email, name: cred.user.displayName || email, email: email, role: 'Staff', firebase_uid: cred.user.uid };
+    currentUser = user;
+    document.getElementById('loginError').style.display = 'none';
+    document.getElementById('loginLoadingError').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('hubScreen').style.display = 'flex';
+    document.getElementById('hubUser').textContent = user.name + ' (' + user.role + ')';
+    history.replaceState({screen:'hub'}, '', '');
+  } catch(e) {
+    console.error('Firebase 로그인 실패:', e.code, e.message);
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('loginLoadingError').style.display = 'none';
-    return;
   }
-  currentUser = user;
-  document.getElementById('loginError').style.display = 'none';
-  document.getElementById('loginLoadingError').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'none';
-  // 허브 화면 표시
-  document.getElementById('hubScreen').style.display = 'flex';
-  document.getElementById('hubUser').textContent = user.name + ' (' + user.role + ')';
-  history.replaceState({screen:'hub'}, '', '');
+}
+async function enterFieldReport() {
+  try {
+    const u = firebase.auth().currentUser;
+    if (!u) { alert('세션이 만료되었습니다. 다시 로그인해 주세요.'); return; }
+    const token = await u.getIdToken(true);
+    window.open('http://98.167.239.190:3000/sso?token='+encodeURIComponent(token), '_blank');
+  } catch(e) { alert('Field Report 접속 실패: '+e.message); }
 }
 function enterApproval() {
   document.getElementById('hubScreen').style.display = 'none';
