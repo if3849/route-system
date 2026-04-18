@@ -352,6 +352,12 @@
         <div class="hub-card-desc">Asset Management System</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
+      <div class="hub-card" onclick="enterQuotation()">
+        <span class="hub-card-icon">&#129534;</span>
+        <div class="hub-card-title">Quotation</div>
+        <div class="hub-card-desc">Quotation Maker &amp; Archive</div>
+        <span class="hub-card-arrow">&#8594;</span>
+      </div>
     </div>
     <div class="hub-footer">Route System Inc. &mdash; Staff Portal</div>
   </div>
@@ -897,6 +903,14 @@ async function enterFieldReport() {
     const token = await u.getIdToken(true);
     window.open('http://98.167.239.190:3000/sso?token='+encodeURIComponent(token), '_blank');
   } catch(e) { alert('Field Report 접속 실패: '+e.message); }
+}
+async function enterQuotation() {
+  try {
+    const u = firebase.auth().currentUser;
+    if (!u) { alert('세션이 만료되었습니다. 다시 로그인해 주세요.'); return; }
+    const token = await u.getIdToken(true);
+    window.open('http://routesystem.synology.me:8082/sso?token='+encodeURIComponent(token), '_blank');
+  } catch(e) { alert('Quotation 접속 실패: '+e.message); }
 }
 function enterApproval() {
   document.getElementById('hubScreen').style.display = 'none';
