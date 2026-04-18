@@ -1511,9 +1511,9 @@ function saveEditUser() {
   if (pw && pw.length < 6) { alert('비밀번호는 6자 이상이어야 합니다.'); return; }
   db.collection('users').doc(id).get().then(docSnap => {
     if (!docSnap.exists) { alert('사용자를 찾을 수 없습니다.'); return; }
-    const currentData = docSnap.data();
-    const updatedData = { ...currentData, name, email, role, pw: pw ? pw : currentData.pw };
-    return db.collection('users').doc(id).set(updatedData);
+    const fields = { name, email, role };
+    if (pw) fields.pw = pw;
+    return db.collection('users').doc(id).update(fields);
   }).then(() => {
     if (id === currentUser.id) {
       document.getElementById('topbarUser').textContent = name + ' (' + role + ')';
