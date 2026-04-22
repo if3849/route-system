@@ -859,21 +859,24 @@ async function sendCcEmails(doc, action, comment) {
 
 // ── LOGIN / LOGOUT ──
 async function doLogin() {
-  if (!usersLoaded) {
-    document.getElementById('loginLoadingError').style.display = 'block';
-    document.getElementById('loginError').style.display = 'none';
-    return;
-  }
   const idInput = document.getElementById('loginId').value.trim();
   const pw = document.getElementById('loginPw').value;
   let email = idInput;
-  if (!idInput.includes('@')) {
+  if (!idInput.includes('@') && usersLoaded) {
     const match = users.find(u => u.id === idInput);
     if (match && match.email) email = match.email;
   }
   try {
     const cred = await firebase.auth().signInWithEmailAndPassword(email, pw);
-    let user = users.find(u => (u.email && u.email.toLowerCase() === email.toLowerCase()) || u.firebase_uid === cred.user.uid);
+    let user = usersLoaded
+      ? users.find(u => (u.email && u.email.toLowerCase() === email.toLowerCase()) || u.firebase_uid === cred.user.uid)
+      : null;
+    if (!user) {
+      try {
+        const snap = await db.collection('users').doc(email).get();
+        if (snap.exists) user = snap.data();
+      } catch(_) {}
+    }
     if (!user) user = { id: email, name: cred.user.displayName || email, email: email, role: 'Staff', firebase_uid: cred.user.uid };
     currentUser = user;
     document.getElementById('loginError').style.display = 'none';
