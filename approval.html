@@ -768,13 +768,9 @@ function hideFirebaseError() {
   document.getElementById('loginLoadingError').style.display = 'none';
 }
 
-const EMAIL_PUBLIC_KEY  = 'UeNmq8x-Jq_IcPeHG';
-const EMAIL_SERVICE_ID  = 'service_mk3827x';
-const EMAIL_TEMPLATE_ID = 'template_mst85o1';
-let emailCfg = JSON.parse(localStorage.getItem('rs_email_v3') || 'null') || {
-  publicKey: EMAIL_PUBLIC_KEY, serviceId: EMAIL_SERVICE_ID, templateId: EMAIL_TEMPLATE_ID
-};
-if (emailCfg.publicKey) { try { emailjs.init(emailCfg.publicKey); } catch(e){} }
+// 이메일 발송: Microsoft Graph 백엔드(/send-email) 사용. EmailJS 키 제거됨.
+const EMAIL_API_BASE = 'https://routesystem-nas.tail66c283.ts.net';
+let emailCfg = {};
 
 // ── 파일 업로드 ──
 async function uploadFiles() {
@@ -831,32 +827,38 @@ async function saveDoc(docData) { await db.collection('documents').doc(docData.i
 async function removeDoc(docId) { await db.collection('documents').doc(docId).delete(); }
 function saveEmailCfg() { localStorage.setItem('rs_email_v3', JSON.stringify(emailCfg)); }
 
-// ── 이메일 발송 ──
+// ── 이메일 발송 (Microsoft Graph 백엔드 사용) ──
 async function sendEmail(toId, doc, action, comment) {
-  if (!emailCfg.publicKey || !emailCfg.serviceId || !emailCfg.templateId) return;
   const toUser = users.find(u => u.id === toId);
   if (!toUser || !toUser.email) return;
   const requester = users.find(u => u.id === doc.requesterId);
-  const actionLabels = {
-    submitted: 'A new document requires your approval',
-    approved: 'Document has been fully approved',
-    rejected: 'Document has been rejected',
-    resubmitted: 'A rejected document has been revised and resubmitted — please review',
-    step_approved: 'Previous step approved — your approval is now required',
-    cc_submitted: 'You have been added as CC on a new document',
-    cc_approved: 'A document you are CC\'d on has been fully approved',
-    cc_rejected: 'A document you are CC\'d on has been rejected'
-  };
+  const fromEmail = (currentUser && currentUser.email)
+    ? currentUser.email
+    : (requester && requester.email ? requester.email : '');
+  if (!fromEmail) return;
   try {
-    await emailjs.send(emailCfg.serviceId, emailCfg.templateId, {
-      to_email: toUser.email, to_name: toUser.name,
-      doc_no: doc.docNo, doc_title: doc.title, doc_type: doc.type,
-      requester: requester ? requester.name : doc.requesterId,
-      action: actionLabels[action] || action,
-      comment: comment || '—', priority: doc.priority,
-      login_url: window.location.href.split('?')[0]
+    const res = await fetch(EMAIL_API_BASE + '/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to_email: toUser.email,
+        to_name: toUser.name,
+        from_email: fromEmail,
+        doc_no: doc.docNo,
+        doc_title: doc.title,
+        doc_type: doc.type,
+        requester: requester ? requester.name : doc.requesterId,
+        action: action,
+        comment: comment || '—',
+        priority: doc.priority,
+        login_url: window.location.href.split('?')[0]
+      })
     });
-  } catch(e) { console.error('Email failed:', e); }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error('Email failed:', res.status, err);
+    }
+  } catch (e) { console.error('Email failed:', e); }
 }
 async function sendCcEmails(doc, action, comment) {
   if (!doc.cc || !doc.cc.length) return;
@@ -1569,22 +1571,32 @@ function saveEmailSettings() {
   setTimeout(() => s.textContent = '', 3000);
 }
 async function testEmail() {
-  if (!emailCfg.publicKey) { alert('Please save EmailJS settings first.'); return; }
   const me = users.find(u => u.id === currentUser.id);
   if (!me || !me.email) { alert('Please set your email address in Users page first.'); return; }
   const s = document.getElementById('emailSettingStatus');
   s.textContent = 'Sending...'; s.style.color = 'var(--accent)';
   try {
-    await emailjs.send(emailCfg.serviceId, emailCfg.templateId, {
-      to_email: me.email, to_name: me.name,
-      doc_no: 'RSI-TEST', doc_title: 'Test Email Notification',
-      doc_type: 'Test', requester: me.name,
-      action: 'This is a test email from Route System Approval System',
-      comment: '—', priority: 'Normal'
+    const res = await fetch(EMAIL_API_BASE + '/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to_email: me.email, to_name: me.name,
+        from_email: me.email,
+        doc_no: 'RSI-TEST', doc_title: 'Test Email Notification',
+        doc_type: 'Test', requester: me.name,
+        action: 'submitted',
+        comment: '테스트 메일입니다 (Microsoft Graph 경유)',
+        priority: 'Normal',
+        login_url: window.location.href.split('?')[0]
+      })
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || ('HTTP ' + res.status));
+    }
     s.textContent = '✓ Test email sent!'; s.style.color = 'var(--green)';
   } catch(e) {
-    s.textContent = '✕ Failed: ' + (e.text || e.message || JSON.stringify(e));
+    s.textContent = '✕ Failed: ' + (e.message || JSON.stringify(e));
     s.style.color = 'var(--red)';
   }
 }
