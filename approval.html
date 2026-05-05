@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Route System Inc. — Approval System</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet"/>
-  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -541,32 +540,15 @@
     <div class="page" id="page-settings">
       <div class="page-header"><div><div class="page-title-tag">Configuration</div><div class="page-title">SETTINGS</div></div></div>
       <div class="settings-card">
-        <div class="settings-head">📧 Email Notification — EmailJS Setup</div>
+        <div class="settings-head">📧 Email Notification</div>
         <div class="info-box">
-          이메일 알림 기능은 <strong>EmailJS</strong> 무료 서비스를 사용합니다.<br>
           결재 요청 및 승인/반려 시 담당자에게 자동으로 이메일이 발송됩니다.<br>
-          무료 플랜: 월 200건 발송 가능 &nbsp;→&nbsp; <a href="https://www.emailjs.com" target="_blank">emailjs.com</a>
+          발송 방식: <strong>Microsoft 365 (Graph API)</strong> — 회사 메일 계정에서 직접 발송<br>
+          보낸이는 결재를 진행한 본인의 이메일로 표시되며, 한도는 사실상 무제한입니다.
         </div>
-        <div style="margin-top:1.5rem;">
-          <div class="form-group">
-            <label class="field-label">EmailJS Public Key</label>
-            <input class="field-input" type="text" id="ejsPublicKey" placeholder="e.g. aBcDeFgHiJkLmNoPq"/>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="field-label">Service ID</label>
-              <input class="field-input" type="text" id="ejsServiceId" placeholder="service_xxxxxxx"/>
-            </div>
-            <div class="form-group">
-              <label class="field-label">Template ID</label>
-              <input class="field-input" type="text" id="ejsTemplateId" placeholder="template_xxxxxxx"/>
-            </div>
-          </div>
-          <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
-            <button class="btn btn-gold" onclick="saveEmailSettings()">Save Settings →</button>
-            <button class="btn btn-outline" onclick="testEmail()">Send Test Email</button>
-            <span id="emailSettingStatus" style="font-size:0.82rem;color:var(--mid);"></span>
-          </div>
+        <div style="margin-top:1.5rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-outline" onclick="testEmail()">Send Test Email</button>
+          <span id="emailSettingStatus" style="font-size:0.82rem;color:var(--mid);"></span>
         </div>
       </div>
     </div>
@@ -825,8 +807,6 @@ document.addEventListener('keydown', e => {
 function saveData() { db.collection('meta').doc('counter').set({ value: docCounter }); }
 async function saveDoc(docData) { await db.collection('documents').doc(docData.id).set(docData); }
 async function removeDoc(docId) { await db.collection('documents').doc(docId).delete(); }
-function saveEmailCfg() { localStorage.setItem('rs_email_v3', JSON.stringify(emailCfg)); }
-
 // ── 이메일 발송 (Microsoft Graph 백엔드 사용) ──
 async function sendEmail(toId, doc, action, comment) {
   const toUser = users.find(u => u.id === toId);
@@ -1008,7 +988,6 @@ function refreshPage(name) {
   if (name === 'all') renderTable('allTable', visible, 'all');
   if (name === 'users') renderUsers();
   if (name === 'new') initNewPage();
-  if (name === 'settings') loadEmailSettings();
 }
 
 // ── NEW 페이지 초기화 ──
@@ -1555,21 +1534,6 @@ function removeUser(id) {
 }
 
 // ── SETTINGS ──
-function loadEmailSettings() {
-  document.getElementById('ejsPublicKey').value = emailCfg.publicKey || '';
-  document.getElementById('ejsServiceId').value = emailCfg.serviceId || '';
-  document.getElementById('ejsTemplateId').value = emailCfg.templateId || '';
-}
-function saveEmailSettings() {
-  emailCfg.publicKey = document.getElementById('ejsPublicKey').value.trim();
-  emailCfg.serviceId = document.getElementById('ejsServiceId').value.trim();
-  emailCfg.templateId = document.getElementById('ejsTemplateId').value.trim();
-  saveEmailCfg();
-  if (emailCfg.publicKey) { try { emailjs.init(emailCfg.publicKey); } catch(e){} }
-  const s = document.getElementById('emailSettingStatus');
-  s.textContent = '✓ Saved!'; s.style.color = 'var(--green)';
-  setTimeout(() => s.textContent = '', 3000);
-}
 async function testEmail() {
   const me = users.find(u => u.id === currentUser.id);
   if (!me || !me.email) { alert('Please set your email address in Users page first.'); return; }
