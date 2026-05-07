@@ -244,9 +244,9 @@
 
     textarea.field-input-white {
       width:100%; background:#ffffff; border:1px solid #cccccc; color:#111111;
-      padding:11px 14px; font-family:'Barlow',sans-serif; font-size:0.95rem;
+      padding:11px 14px; font-family:'Consolas','Menlo','Courier New',monospace; font-size:0.9rem;
       outline:none; margin-bottom:0; transition:border-color 0.2s;
-      resize:vertical; min-height:100px; line-height:1.7;
+      resize:vertical; min-height:100px; line-height:1.65;
     }
     textarea.field-input-white:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(200,169,110,0.2); }
     textarea.field-input-white::placeholder { color:#999999; }
@@ -428,18 +428,18 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label class="field-label">Document Type</label>
-            <select class="field-input" id="docType">
-              <option value="">— Select Type —</option>
-              <option>Purchase Request</option><option>Expense Report</option>
-              <option>Leave Request</option><option>Project Approval</option>
-              <option>Contract Review</option><option>Other</option>
+            <label class="field-label">Document Type / 문서 종류</label>
+            <select class="field-input" id="docType" onchange="onDocTypeChange()">
+              <option value="">— 선택 / Select —</option>
             </select>
+            <div style="font-size:0.75rem;color:var(--mid);margin-top:0.4rem;">문서 종류를 선택하면 결재라인과 본문 양식이 자동으로 채워집니다.</div>
           </div>
           <div class="form-group">
-            <label class="field-label">Priority</label>
+            <label class="field-label">Priority / 우선순위</label>
             <select class="field-input" id="docPriority">
-              <option value="Normal">Normal</option><option value="High">High</option><option value="Urgent">Urgent</option>
+              <option value="Normal">Normal / 보통</option>
+              <option value="High">High / 높음</option>
+              <option value="Urgent">Urgent / 긴급</option>
             </select>
           </div>
         </div>
@@ -448,8 +448,8 @@
           <input class="field-input" type="text" id="docTitle" placeholder="Enter document title"/>
         </div>
         <div class="form-group">
-          <label class="field-label">Approval Line — 순차 결재라인</label>
-          <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">결재자를 순서대로 추가하세요.</div>
+          <label class="field-label">Approval Line / 결재라인</label>
+          <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">위에서 문서 종류를 선택하면 자동으로 채워집니다. 직접 추가/수정도 가능합니다.</div>
           <div class="approver-line" id="approverLine"></div>
           <button class="btn-add-approver" onclick="addApproverRow()">+ 결재자 추가 / Add Approver</button>
         </div>
@@ -551,6 +551,18 @@
           <span id="emailSettingStatus" style="font-size:0.82rem;color:var(--mid);"></span>
         </div>
       </div>
+
+      <div class="settings-card">
+        <div class="settings-head">📋 결재라인 템플릿 / Approval Line Templates</div>
+        <div class="info-box">
+          자주 쓰는 결재라인을 미리 등록해두면 직원들이 작성 시 한 번에 선택할 수 있습니다.<br>
+          예: <strong>"휴가 신청"</strong> 템플릿에 팀장 → 부장 → 대표를 등록하면, 직원이 휴가 신청 시 템플릿만 선택하면 결재라인이 자동으로 채워집니다.
+        </div>
+        <div id="templatesList" style="margin-top:1.5rem;"></div>
+        <div style="margin-top:1rem;">
+          <button class="btn btn-gold" onclick="openTemplateModal()">+ 새 템플릿 / New Template</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -621,6 +633,48 @@
   </div>
 </div>
 
+<!-- TEMPLATE MODAL -->
+<div class="modal-overlay" id="templateModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div class="modal-title" id="templateModalTitle">New Approval Line Template</div>
+      <button class="modal-close" onclick="closeModal('templateModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="templateId"/>
+      <div class="form-group">
+        <label class="field-label">Template Name / 템플릿 이름</label>
+        <input class="field-input" type="text" id="templateName" placeholder="예: 휴가 신청, 구매 요청"/>
+      </div>
+      <div class="form-group">
+        <label class="field-label">Description / 설명 (선택)</label>
+        <input class="field-input" type="text" id="templateDesc" placeholder="예: 일반 직원 연차 신청용"/>
+      </div>
+      <div class="form-group">
+        <label class="field-label">결재자 순서 / Approval Order</label>
+        <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">결재가 진행될 순서대로 결재자를 추가하세요.</div>
+        <div class="approver-line" id="templateApproverLine"></div>
+        <button class="btn-add-approver" onclick="addTemplateApproverRow()">+ 결재자 추가 / Add Approver</button>
+      </div>
+      <div class="form-group">
+        <label class="field-label">참조자 / CC (선택)</label>
+        <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">참조자는 결재 권한 없이 알림만 받습니다.</div>
+        <div id="templateCcLine"></div>
+        <button class="btn-add-approver" onclick="addTemplateCcRow()">+ 참조자 추가 / Add CC</button>
+      </div>
+      <div class="form-group">
+        <label class="field-label">본문 양식 / Content Template (선택)</label>
+        <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.6rem;">템플릿 적용 시 본문에 자동으로 채워질 양식입니다. 비워두면 본문은 그대로 둡니다.<br>예: <span style="color:var(--accent)">품목:&nbsp;&nbsp;&nbsp;구매 사유:&nbsp;&nbsp;&nbsp;가격:</span></div>
+        <textarea class="field-input-white" id="templateContent" placeholder="품목:&#10;수량:&#10;단가:&#10;구매 사유:&#10;희망 납기일:" style="min-height:160px;font-family:'Consolas',monospace;font-size:0.88rem;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('templateModal')">Cancel</button>
+      <button class="btn btn-gold" onclick="saveTemplate()">Save Template →</button>
+    </div>
+  </div>
+</div>
+
 <!-- EXPANDED EDITOR -->
 <div id="expandEditorModal">
   <div class="expand-editor-box">
@@ -654,6 +708,11 @@ let approverRows = [];
 let ccRows = [];
 let uploadedFiles = [];
 let editingDocId = null; // ★ 편집 중인 문서 ID (null = 신규 작성)
+let templates = [];
+let templatesLoaded = false;
+let templateApproverRows = [];
+let templateCcRows = [];
+let editingTemplateId = null;
 
 const DEFAULT_USERS = [
   { id:'tim.park@routesystemus.com',      name:'Sung Eun Park',  pw:'Spark@2026',  role:'Admin',  email:'tim.park@routesystemus.com' },
@@ -736,6 +795,19 @@ window.addEventListener('load', function() {
     }, err => {
       console.error('Firebase documents sync error:', err);
       showFirebaseError();
+    });
+
+    db.collection('approval_templates').onSnapshot(snapshot => {
+      templates = [];
+      snapshot.forEach(d => templates.push({ id: d.id, ...d.data() }));
+      templates.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      templatesLoaded = true;
+      if (currentUser) {
+        refreshTemplateDropdown();
+        renderTemplates();
+      }
+    }, err => {
+      console.error('Firebase templates sync error:', err);
     });
 
   } catch(e) {
@@ -969,6 +1041,8 @@ function refreshAll() {
   const cnt = docs.filter(d => isMyTurn(d)).length;
   const badge = document.getElementById('pendingBadge');
   badge.textContent = cnt; badge.style.display = cnt > 0 ? 'inline-block' : 'none';
+  refreshTemplateDropdown();
+  renderTemplates();
 }
 
 function canViewDoc(doc) {
@@ -1027,8 +1101,15 @@ function editDoc(docId) {
   if (nav) nav.classList.add('active');
 
   setTimeout(() => {
-    // 폼에 기존 내용 채우기
-    document.getElementById('docType').value     = doc.type     || '';
+    // 폼에 기존 내용 채우기 (편집 모드는 템플릿 자동 적용 안 함)
+    const dt = document.getElementById('docType');
+    const typeVal = doc.type || '';
+    if ([...dt.options].some(o => o.value === typeVal)) {
+      dt.value = typeVal;
+    } else {
+      const matched = templates.find(t => t.name === typeVal);
+      dt.value = matched ? matched.id : '__other__';
+    }
     document.getElementById('docPriority').value = doc.priority || 'Normal';
     document.getElementById('docTitle').value    = doc.title    || '';
     document.getElementById('docContent').value  = doc.content  || '';
@@ -1249,9 +1330,272 @@ function removeCcRow(idx) {
   });
 }
 
+// ── APPROVAL LINE TEMPLATES (Document Type 통합) ──
+function refreshTemplateDropdown() {
+  const sel = document.getElementById('docType');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— 선택 / Select —</option>' +
+    templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('') +
+    '<option value="__other__">기타 / Other</option>';
+  // 기존 선택값 유지 — 템플릿 ID 또는 __other__ 또는 (호환성) 과거 문자열
+  if (cur) {
+    if ([...sel.options].some(o => o.value === cur)) {
+      sel.value = cur;
+    } else {
+      // 과거 문서: type 값이 템플릿 이름 문자열일 수 있음 — 매칭 시도
+      const matched = templates.find(t => t.name === cur);
+      if (matched) sel.value = matched.id;
+    }
+  }
+}
+
+function onDocTypeChange() {
+  const id = document.getElementById('docType').value;
+  if (!id || id === '__other__') return;
+  const t = templates.find(x => x.id === id);
+  if (!t) return;
+  applyApprovalTemplate(t);
+}
+
+function applyApprovalTemplate(t) {
+  if (!t) return;
+
+  // 본문 양식 채우기 (기존 본문이 있으면 확인)
+  if (t.content_template) {
+    const docContent = document.getElementById('docContent');
+    const cur = (docContent.value || '').trim();
+    if (!cur || confirm('본문에 이미 입력된 내용이 있습니다.\n템플릿 양식으로 덮어쓸까요?')) {
+      docContent.value = t.content_template;
+    }
+  }
+
+  // 본인은 자기 결재자가 될 수 없으므로 제외
+  const skippedNames = [];
+  const filteredApprovers = (t.approvers || []).filter(id => {
+    if (id === currentUser.id) {
+      const u = users.find(x => x.id === id);
+      skippedNames.push(u ? u.name : id);
+      return false;
+    }
+    return true;
+  });
+  const filteredCc = (t.cc || []).filter(id => {
+    if (id === currentUser.id) {
+      const u = users.find(x => x.id === id);
+      skippedNames.push((u ? u.name : id) + ' (CC)');
+      return false;
+    }
+    return true;
+  });
+
+  // 결재라인 채우기 (템플릿에 결재자가 있을 때만 — 비어있으면 기존 결재라인 유지)
+  if (filteredApprovers.length > 0) {
+    approverRows = [];
+    document.getElementById('approverLine').innerHTML = '';
+    filteredApprovers.forEach((approverId, idx) => {
+      approverRows.push(approverId);
+      const row = document.createElement('div');
+      row.className = 'approver-row'; row.id = 'ar-' + idx;
+      row.innerHTML = `<span class="approver-step-num">${idx+1}</span>
+        <select class="field-input" style="margin-bottom:0" onchange="approverRows[${idx}]=this.value">
+          <option value="">— Select Approver —</option>${getApproverOptions(approverId)}
+        </select>
+        ${idx > 0 ? `<button class="btn-remove-approver" onclick="removeApproverRow(${idx})">✕</button>` : ''}`;
+      document.getElementById('approverLine').appendChild(row);
+    });
+  }
+
+  // 참조자 채우기 (템플릿에 CC가 있을 때만)
+  if (filteredCc.length > 0) {
+    ccRows = [];
+    document.getElementById('ccLine').innerHTML = '';
+    filteredCc.forEach((ccId, i) => {
+      ccRows.push(ccId);
+      const row = document.createElement('div');
+      row.className = 'approver-row'; row.id = 'cc-' + i;
+      row.innerHTML = `<span class="approver-step-num" style="color:var(--mid)">CC</span>
+        <select class="field-input" style="margin-bottom:0" onchange="ccRows[${i}]=this.value">
+          <option value="">— Select CC —</option>${getApproverOptions(ccId)}
+        </select>
+        <button class="btn-remove-approver" onclick="removeCcRow(${i})">✕</button>`;
+      document.getElementById('ccLine').appendChild(row);
+    });
+  }
+
+  if (skippedNames.length > 0) {
+    setTimeout(() => alert('본인은 자신의 결재자/참조자가 될 수 없어 다음 항목이 자동으로 제외되었습니다:\n\n• ' + skippedNames.join('\n• ')), 100);
+  }
+}
+
+function renderTemplates() {
+  const list = document.getElementById('templatesList');
+  if (!list) return;
+  if (!templates.length) {
+    list.innerHTML = '<div style="color:var(--mid);font-size:0.85rem;padding:1rem 0;">등록된 템플릿이 없습니다. 아래 버튼으로 새 템플릿을 만드세요.</div>';
+    return;
+  }
+  list.innerHTML = templates.map(t => {
+    const names = (t.approvers || []).map(id => getUserName(id)).join(' → ') || '—';
+    const ccNames = (t.cc || []).map(id => getUserName(id)).join(', ');
+    const hasContent = (t.content_template || '').trim().length > 0;
+    return `
+      <div style="border:1px solid var(--dark3);padding:1rem;margin-bottom:0.6rem;display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;color:var(--accent);margin-bottom:0.3rem;">
+            ${t.name || '(이름 없음)'}
+            ${hasContent ? '<span style="margin-left:0.5rem;font-size:0.7rem;color:var(--mid);font-weight:normal;border:1px solid var(--dark3);padding:0.1rem 0.4rem;">📝 본문 양식</span>' : ''}
+          </div>
+          ${t.description ? `<div style="color:var(--mid);font-size:0.8rem;margin-bottom:0.4rem;">${t.description}</div>` : ''}
+          <div style="font-size:0.85rem;line-height:1.5;"><strong style="color:var(--mid)">결재:</strong> ${names}</div>
+          ${ccNames ? `<div style="font-size:0.8rem;color:var(--mid);margin-top:0.2rem;">CC: ${ccNames}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:0.4rem;flex-shrink:0;">
+          <button class="btn btn-outline" style="padding:0.4rem 0.8rem;font-size:0.78rem;" onclick="openTemplateModal('${t.id}')">Edit</button>
+          <button class="btn btn-outline" style="padding:0.4rem 0.8rem;font-size:0.78rem;color:var(--red);border-color:var(--red);" onclick="deleteTemplate('${t.id}')">Delete</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function getTemplateApproverOptions(selectedId) {
+  return users.map(u =>
+    `<option value="${u.id}" ${u.id===selectedId?'selected':''}>${u.name} (${u.role})</option>`
+  ).join('');
+}
+
+function addTemplateApproverRow(presetId) {
+  const idx = templateApproverRows.length;
+  templateApproverRows.push(presetId || '');
+  const row = document.createElement('div');
+  row.className = 'approver-row'; row.id = 'tar-' + idx;
+  row.innerHTML = `<span class="approver-step-num">${idx+1}</span>
+    <select class="field-input" style="margin-bottom:0" onchange="templateApproverRows[${idx}]=this.value">
+      <option value="">— Select Approver —</option>${getTemplateApproverOptions(presetId || '')}
+    </select>
+    ${idx > 0 ? `<button class="btn-remove-approver" onclick="removeTemplateApproverRow(${idx})">✕</button>` : ''}`;
+  document.getElementById('templateApproverLine').appendChild(row);
+}
+
+function removeTemplateApproverRow(idx) {
+  templateApproverRows.splice(idx, 1);
+  const saved = [...templateApproverRows]; templateApproverRows = [];
+  document.getElementById('templateApproverLine').innerHTML = '';
+  saved.forEach(id => addTemplateApproverRow(id));
+  if (templateApproverRows.length === 0) addTemplateApproverRow();
+}
+
+function addTemplateCcRow(presetId) {
+  const idx = templateCcRows.length;
+  templateCcRows.push(presetId || '');
+  const row = document.createElement('div');
+  row.className = 'approver-row'; row.id = 'tcc-' + idx;
+  row.innerHTML = `<span class="approver-step-num" style="color:var(--mid)">CC</span>
+    <select class="field-input" style="margin-bottom:0" onchange="templateCcRows[${idx}]=this.value">
+      <option value="">— Select CC —</option>${getTemplateApproverOptions(presetId || '')}
+    </select>
+    <button class="btn-remove-approver" onclick="removeTemplateCcRow(${idx})">✕</button>`;
+  document.getElementById('templateCcLine').appendChild(row);
+}
+
+function removeTemplateCcRow(idx) {
+  templateCcRows.splice(idx, 1);
+  const saved = [...templateCcRows]; templateCcRows = [];
+  document.getElementById('templateCcLine').innerHTML = '';
+  saved.forEach(id => addTemplateCcRow(id));
+}
+
+function openTemplateModal(tmplId) {
+  if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Manager')) {
+    alert('관리자만 템플릿을 관리할 수 있습니다.');
+    return;
+  }
+  editingTemplateId = tmplId || null;
+  templateApproverRows = [];
+  templateCcRows = [];
+  document.getElementById('templateApproverLine').innerHTML = '';
+  document.getElementById('templateCcLine').innerHTML = '';
+
+  if (tmplId) {
+    const t = templates.find(x => x.id === tmplId);
+    if (!t) return;
+    document.getElementById('templateModalTitle').textContent = 'Edit Template — ' + t.name;
+    document.getElementById('templateId').value = t.id;
+    document.getElementById('templateName').value = t.name || '';
+    document.getElementById('templateDesc').value = t.description || '';
+    document.getElementById('templateContent').value = t.content_template || '';
+    (t.approvers || []).forEach(id => addTemplateApproverRow(id));
+    (t.cc || []).forEach(id => addTemplateCcRow(id));
+    if (templateApproverRows.length === 0) addTemplateApproverRow();
+  } else {
+    document.getElementById('templateModalTitle').textContent = 'New Approval Line Template';
+    document.getElementById('templateId').value = '';
+    document.getElementById('templateName').value = '';
+    document.getElementById('templateDesc').value = '';
+    document.getElementById('templateContent').value = '';
+    addTemplateApproverRow();
+  }
+  document.getElementById('templateModal').classList.add('open');
+}
+
+function saveTemplate() {
+  const name = document.getElementById('templateName').value.trim();
+  if (!name) { alert('템플릿 이름을 입력하세요.'); return; }
+  const desc = document.getElementById('templateDesc').value.trim();
+  const approvers = templateApproverRows.filter(id => id);
+  if (new Set(approvers).size !== approvers.length) { alert('동일한 결재자가 중복 선택되었습니다.'); return; }
+  const cc = templateCcRows.filter(id => id);
+  const overlap = cc.filter(id => approvers.includes(id));
+  if (overlap.length) { alert('결재자와 참조자에 동일인이 있습니다.'); return; }
+  const contentTmplCheck = document.getElementById('templateContent').value.trim();
+  if (!approvers.length && !contentTmplCheck) {
+    if (!confirm('결재자와 본문 양식이 모두 비어있습니다. 그래도 저장할까요?')) return;
+  }
+
+  const contentTemplate = document.getElementById('templateContent').value;
+  const data = {
+    name: name,
+    description: desc,
+    approvers: approvers,
+    cc: cc,
+    content_template: contentTemplate,
+    updated_at: Date.now(),
+    updated_by: currentUser.id
+  };
+
+  if (editingTemplateId) {
+    db.collection('approval_templates').doc(editingTemplateId).update(data)
+      .then(() => { closeModal('templateModal'); alert('✓ 템플릿이 수정되었습니다.'); })
+      .catch(e => alert('저장 오류: ' + e.message));
+  } else {
+    data.created_at = Date.now();
+    data.created_by = currentUser.id;
+    db.collection('approval_templates').add(data)
+      .then(() => { closeModal('templateModal'); alert('✓ 새 템플릿이 등록되었습니다.'); })
+      .catch(e => alert('등록 오류: ' + e.message));
+  }
+}
+
+function deleteTemplate(id) {
+  const t = templates.find(x => x.id === id);
+  if (!t) return;
+  if (!confirm(`"${t.name}" 템플릿을 삭제하시겠습니까?`)) return;
+  db.collection('approval_templates').doc(id).delete()
+    .then(() => alert('✓ 템플릿이 삭제되었습니다.'))
+    .catch(e => alert('삭제 오류: ' + e.message));
+}
+
 // ── ★ SUBMIT — 신규 + 재제출 통합 처리 ──
 function submitDoc(status) {
-  const type     = document.getElementById('docType').value;
+  const typeRaw  = document.getElementById('docType').value;
+  // 템플릿 ID는 사람이 읽을 수 있는 이름으로 변환해서 저장 (DB는 type 문자열만 보관)
+  let type = typeRaw;
+  if (typeRaw === '__other__') {
+    type = '기타 / Other';
+  } else if (typeRaw) {
+    const tmpl = templates.find(t => t.id === typeRaw);
+    if (tmpl) type = tmpl.name;
+  }
   const title    = document.getElementById('docTitle').value.trim();
   const content  = document.getElementById('docContent').value.trim();
   const priority = document.getElementById('docPriority').value;
@@ -1374,7 +1718,7 @@ function viewDoc(docId) {
     <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDate(doc.createdAt)}</div></div>
     <div class="detail-row" style="flex-direction:column;gap:0.5rem;">
       <div class="detail-label">Content</div>
-      <div class="detail-value" style="line-height:1.8;white-space:pre-wrap;">${(doc.content||'').replace(/\n/g,'<br>') || '<span style="color:var(--mid)">No content</span>'}</div>
+      <div class="detail-value" style="line-height:1.65;white-space:pre-wrap;font-family:'Consolas','Menlo','Courier New',monospace;font-size:0.88rem;background:#0f0f0f;border:1px solid var(--dark3);padding:1rem;">${(doc.content||'').replace(/\n/g,'<br>') || '<span style="color:var(--mid)">No content</span>'}</div>
     </div>
     <div class="detail-row" style="flex-direction:column;gap:0.5rem;">
       <div class="detail-label">Attachments</div><div>${fileHtml}</div>
