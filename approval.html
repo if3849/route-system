@@ -1833,7 +1833,21 @@ function openEditUser(id) {
   document.getElementById('editUserModal').classList.add('open');
 }
 
-function saveEditUser() {
+async function adminApiCall(path, body) {
+  const fbUser = firebase.auth().currentUser;
+  if (!fbUser) throw new Error('로그인이 필요합니다.');
+  const token = await fbUser.getIdToken();
+  const res = await fetch(EMAIL_API_BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
+async function saveEditUser() {
   const id = document.getElementById('editUserId').value;
   const name = document.getElementById('editUserName').value.trim();
   const email = document.getElementById('editUserEmail').value.trim();
@@ -1843,38 +1857,49 @@ function saveEditUser() {
   if (!name) { alert('Please enter a name.'); return; }
   if (pw && pw !== pwConfirm) { alert('비밀번호가 일치하지 않습니다.'); return; }
   if (pw && pw.length < 6) { alert('비밀번호는 6자 이상이어야 합니다.'); return; }
-  db.collection('users').doc(id).get().then(docSnap => {
-    if (!docSnap.exists) { alert('사용자를 찾을 수 없습니다.'); return; }
-    const fields = { name, email, role };
-    if (pw) fields.pw = pw;
-    return db.collection('users').doc(id).update(fields);
-  }).then(() => {
+  try {
+    await adminApiCall('/admin/update-user', { id, name, email, role, password: pw || undefined });
     if (id === currentUser.id) {
       document.getElementById('topbarUser').textContent = name + ' (' + role + ')';
     }
     closeModal('editUserModal');
-    alert('✓ 저장되었습니다!');
-  }).catch(e => alert('저장 오류: ' + e.message));
+    alert('✓ 저장되었습니다!' + (pw ? '\n새 비밀번호로 다시 로그인하세요.' : ''));
+    if (pw && id === currentUser.id) {
+      await firebase.auth().signOut();
+      location.reload();
+    }
+  } catch (e) {
+    alert('저장 오류: ' + e.message);
+  }
 }
 
 function openAddUser() { document.getElementById('userModal').classList.add('open'); }
-function addUser() {
+async function addUser() {
   const name  = document.getElementById('newUserName').value.trim();
   const id    = document.getElementById('newUserId').value.trim();
   const email = document.getElementById('newUserEmail').value.trim();
   const pw    = document.getElementById('newUserPw').value;
   const role  = document.getElementById('newUserRole').value;
   if (!name || !id || !pw) { alert('Please fill in required fields.'); return; }
+  if (pw.length < 6) { alert('비밀번호는 6자 이상이어야 합니다.'); return; }
   if (users.find(u => u.id === id)) { alert('User ID already exists.'); return; }
-  db.collection('users').doc(id).set({ id, name, pw, role, email }).then(() => {
+  try {
+    await adminApiCall('/admin/create-user', { email: id, password: pw, name, role });
     closeModal('userModal');
     ['newUserName','newUserId','newUserEmail','newUserPw'].forEach(i => document.getElementById(i).value = '');
     alert('✓ User added!');
-  }).catch(e => alert('저장 오류: ' + e.message));
+  } catch (e) {
+    alert('저장 오류: ' + e.message);
+  }
 }
-function removeUser(id) {
+async function removeUser(id) {
   if (!confirm('Remove this user?')) return;
-  db.collection('users').doc(id).delete().then(() => alert('✓ User removed!')).catch(e => alert('삭제 오류: ' + e.message));
+  try {
+    await adminApiCall('/admin/delete-user', { id });
+    alert('✓ User removed!');
+  } catch (e) {
+    alert('삭제 오류: ' + e.message);
+  }
 }
 
 // ── SETTINGS ──
