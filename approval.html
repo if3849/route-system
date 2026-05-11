@@ -1184,7 +1184,7 @@ function renderDashboard() {
   document.getElementById('stat-total').textContent = visible.length;
   document.getElementById('stat-pending').textContent = visible.filter(d => d.status === 'pending').length;
   document.getElementById('stat-approved').textContent = visible.filter(d => d.status === 'approved').length;
-  document.getElementById('stat-rejected').textContent = visible.filter(d => d.status === 'rejected').length;
+  document.getElementById('stat-rejected').textContent = visible.filter(d => d.status === 'rejected' || hasBeenRejected(d)).length;
   renderTable('recentTable', [...visible].sort((a,b) => b.createdAt - a.createdAt).slice(0, 8), 'all');
 }
 
@@ -1204,8 +1204,18 @@ function progressHtml(doc) {
 }
 
 // ── TABLES ──
+function hasBeenRejected(doc) {
+  return !!(doc && doc.history && doc.history.some(h => h.action === 'rejected'));
+}
 function statusBadge(s) {
   return `<span class="status-badge status-${s}">${{pending:'Pending',approved:'Approved',rejected:'Rejected',draft:'Draft'}[s]||s}</span>`;
+}
+function statusBadgeFor(doc) {
+  let html = statusBadge(doc.status);
+  if (doc.status !== 'rejected' && hasBeenRejected(doc)) {
+    html += ` <span class="status-badge status-rejected" style="font-size:0.65rem;padding:0.15rem 0.4rem;margin-left:0.3rem;opacity:0.8;" title="이전에 반려된 적 있음 / Previously Rejected">↻ Rejected</span>`;
+  }
+  return html;
 }
 function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-US', {year:'numeric', month:'short', day:'numeric'}); }
 function getUserName(id) { const u = users.find(u => u.id === id); return u ? u.name : id; }
@@ -1232,7 +1242,7 @@ function renderTable(tbodyId, data, mode) {
       <td>${getUserName(doc.requesterId)}</td>
       <td>${prog}</td>
       <td>${fmtDate(doc.createdAt)}</td>
-      <td>${statusBadge(doc.status)}</td>
+      <td>${statusBadgeFor(doc)}</td>
       <td style="white-space:nowrap">${actions}</td>
     </tr>`;
   }).join('');
@@ -1705,7 +1715,7 @@ function viewDoc(docId) {
 
   document.getElementById('modalBody').innerHTML = `
     <div class="detail-row"><div class="detail-label">Doc No.</div><div class="detail-value">${doc.docNo}</div></div>
-    <div class="detail-row"><div class="detail-label">Status</div><div class="detail-value">${statusBadge(doc.status)}</div></div>
+    <div class="detail-row"><div class="detail-label">Status</div><div class="detail-value">${statusBadgeFor(doc)}</div></div>
     <div class="detail-row"><div class="detail-label">Type</div><div class="detail-value">${doc.type}</div></div>
     <div class="detail-row"><div class="detail-label">Priority</div><div class="detail-value">${doc.priority}</div></div>
     <div class="detail-row"><div class="detail-label">Requester</div><div class="detail-value">${getUserName(doc.requesterId)}</div></div>
