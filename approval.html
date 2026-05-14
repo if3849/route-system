@@ -1046,6 +1046,8 @@ function refreshAll() {
 }
 
 function canViewDoc(doc) {
+  // Draft는 작성자 본인에게만 보임 (Admin이라도 타인의 draft는 볼 수 없음)
+  if (doc.status === 'draft') return doc.requesterId === currentUser.id;
   if (currentUser.role === 'Admin') return true;
   if (doc.requesterId === currentUser.id) return true;
   if ((doc.approvers || []).some(a => a.id === currentUser.id)) return true;
@@ -1086,12 +1088,15 @@ function initNewPage() {
   setTimeout(() => { const t = document.getElementById('docTitle'); if(t) t.focus(); }, 100);
 }
 
-// ── ★ 편집 모드 진입 ──
+// ── ★ 편집 모드 진입 (반려 / 임시저장 둘 다 지원) ──
 function editDoc(docId) {
   const doc = docs.find(d => d.id === docId);
-  if (!doc || doc.status !== 'rejected') return;
+  if (!doc) return;
+  if (doc.status !== 'rejected' && doc.status !== 'draft') return;
+  if (doc.requesterId !== currentUser.id) return;
 
   editingDocId = docId;
+  const isDraft = doc.status === 'draft';
 
   // 페이지 이동
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1148,25 +1153,30 @@ function editDoc(docId) {
     uploadedFiles = [...(doc.attachments || [])];
     renderFileList();
 
-    // UI 편집 모드로 변경
-    document.getElementById('newPageTag').textContent   = 'Edit & Resubmit';
-    document.getElementById('newPageTitle').textContent = 'EDIT DOCUMENT';
-    document.getElementById('submitBtn').textContent    = '⟳ Resubmit for Approval →';
+    // UI 편집 모드로 변경 (draft / rejected 분기)
+    document.getElementById('newPageTag').textContent   = isDraft ? 'Edit Draft' : 'Edit & Resubmit';
+    document.getElementById('newPageTitle').textContent = isDraft ? 'EDIT DRAFT' : 'EDIT DOCUMENT';
+    document.getElementById('submitBtn').textContent    = isDraft ? '→ Submit for Approval' : '⟳ Resubmit for Approval →';
     document.getElementById('submitBtn').onclick        = function(){ submitDoc('pending'); };
-    document.getElementById('draftBtn').style.display   = 'none';
+    document.getElementById('draftBtn').style.display   = isDraft ? 'inline-flex' : 'none';
     document.getElementById('cancelEditBtn').style.display = 'inline-flex';
 
-    // 반려 사유 배너
-    const rejectedEntry = doc.history
-      ? [...doc.history].reverse().find(h => h.action === 'rejected')
-      : null;
-    const rejectedByName = rejectedEntry ? getUserName(rejectedEntry.by) : '';
-    const rejectedComment = rejectedEntry && rejectedEntry.comment ? rejectedEntry.comment : '(코멘트 없음)';
+    // 배너 — draft에선 단순 안내, rejected는 반려 사유
     const banner = document.getElementById('editModeBanner');
-    banner.innerHTML = `✏️ <strong>${doc.docNo}</strong> 수정 중&nbsp;&nbsp;|&nbsp;&nbsp;`
-      + `반려자: <strong>${rejectedByName}</strong>&nbsp;&nbsp;|&nbsp;&nbsp;`
-      + `반려 사유: <em>${rejectedComment}</em>`;
-    banner.style.display = 'block';
+    if (isDraft) {
+      banner.innerHTML = `📝 <strong>${doc.docNo}</strong> 임시 저장 문서 수정 중`;
+      banner.style.display = 'block';
+    } else {
+      const rejectedEntry = doc.history
+        ? [...doc.history].reverse().find(h => h.action === 'rejected')
+        : null;
+      const rejectedByName = rejectedEntry ? getUserName(rejectedEntry.by) : '';
+      const rejectedComment = rejectedEntry && rejectedEntry.comment ? rejectedEntry.comment : '(코멘트 없음)';
+      banner.innerHTML = `✏️ <strong>${doc.docNo}</strong> 수정 중&nbsp;&nbsp;|&nbsp;&nbsp;`
+        + `반려자: <strong>${rejectedByName}</strong>&nbsp;&nbsp;|&nbsp;&nbsp;`
+        + `반려 사유: <em>${rejectedComment}</em>`;
+      banner.style.display = 'block';
+    }
 
     document.getElementById('docTitle').focus();
   }, 100);
@@ -1255,8 +1265,8 @@ function buildActions(doc, mode) {
     b += `<button class="btn-sm" style="background:var(--green);color:white;margin-right:2px" onclick="openApprove('${doc.id}','approve')">Approve</button>`;
     b += `<button class="btn-sm" style="background:var(--red);color:white" onclick="openApprove('${doc.id}','reject')">Reject</button>`;
   }
-  // ★ 반려된 내 문서에만 Edit 버튼 표시
-  if (mode === 'mine' && doc.status === 'rejected' && doc.requesterId === currentUser.id) {
+  // ★ 반려/임시저장된 내 문서에 Edit 버튼 표시
+  if (mode === 'mine' && (doc.status === 'rejected' || doc.status === 'draft') && doc.requesterId === currentUser.id) {
     b += ` <button class="btn-sm" style="background:var(--blue);color:white;" onclick="editDoc('${doc.id}')">Edit</button>`;
   }
   if (mode === 'mine' && (doc.status === 'draft' || doc.status === 'pending' || doc.status === 'rejected')) {
@@ -1622,12 +1632,20 @@ function submitDoc(status) {
     if (!title) { alert('Please enter a title.'); return; }
   }
 
-  // ── ★ 편집 모드: 기존 문서 업데이트 ──
+  // ── ★ 편집 모드: 기존 문서 업데이트 (draft / rejected) ──
   if (editingDocId) {
     const oldDoc = docs.find(d => d.id === editingDocId);
     if (!oldDoc) { alert('문서를 찾을 수 없습니다.'); return; }
 
+    const wasDraft     = oldDoc.status === 'draft';
+    const isDraftSave  = status === 'draft';   // 'Save as Draft' 버튼 클릭 시
     const approversData = selApprovers.map(id => ({ id, status:'pending', comment:'', at:null }));
+
+    let histAction, histComment;
+    if (isDraftSave) { histAction = 'draft_updated';  histComment = '임시저장 수정'; }
+    else if (wasDraft) { histAction = 'submitted';    histComment = ''; }
+    else { histAction = 'resubmitted';                histComment = '수정 후 재제출'; }
+
     const updatedDoc = {
       ...oldDoc,
       type, title, content, priority,
@@ -1635,20 +1653,28 @@ function submitDoc(status) {
       cc: selCc,
       approverId: selApprovers[0] || '',
       currentStep: 0,
-      status: 'pending',
+      status: isDraftSave ? 'draft' : 'pending',
       attachments: [...uploadedFiles],
       history: [
         ...(oldDoc.history || []),
-        { action: 'resubmitted', by: currentUser.id, at: Date.now(), comment: '수정 후 재제출' }
+        { action: histAction, by: currentUser.id, at: Date.now(), comment: histComment }
       ]
     };
 
     saveDoc(updatedDoc).then(() => {
       editingDocId = null;
       uploadedFiles = [];
-      sendEmail(approversData[0].id, updatedDoc, 'resubmitted', '수정 후 재제출');
-      sendCcEmails(updatedDoc, 'cc_submitted', '수정 후 재제출');
-      alert('✓ 수정 후 재제출 완료!\n결재자에게 이메일이 발송됩니다.');
+      if (isDraftSave) {
+        alert('✓ 임시저장 업데이트 완료.');
+      } else if (wasDraft) {
+        if (approversData.length > 0) sendEmail(approversData[0].id, updatedDoc, 'submitted', '');
+        sendCcEmails(updatedDoc, 'cc_submitted', '');
+        alert('✓ 제출 완료!\n결재자에게 이메일이 발송됩니다.');
+      } else {
+        sendEmail(approversData[0].id, updatedDoc, 'resubmitted', '수정 후 재제출');
+        sendCcEmails(updatedDoc, 'cc_submitted', '수정 후 재제출');
+        alert('✓ 수정 후 재제출 완료!\n결재자에게 이메일이 발송됩니다.');
+      }
       showPage('mine');
     }).catch(e => alert('저장 오류: ' + e.message));
     return;
