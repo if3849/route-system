@@ -459,7 +459,9 @@
           <div id="ccLine"></div>
           <button class="btn-add-approver" onclick="addCcRow()">+ 참조자 추가 / Add CC</button>
         </div>
-        <div class="form-group">
+        <!-- 정형 결재 양식 패널 (template_kind 있을 때만 표시) -->
+        <div class="form-group" id="structuredPanel" style="display:none;"></div>
+        <div class="form-group" id="docContentWrapper">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
             <label class="field-label" style="margin-bottom:0;">Content / Details</label>
             <button class="btn-expand-trigger" onclick="openExpandEditor()">⛶ 확대 편집 / Expand</button>
@@ -983,6 +985,236 @@ function enterApproval() {
   document.getElementById('exportExcelBtn').style.display = currentUser.role === 'Admin' ? 'inline-flex' : 'none';
   history.pushState({screen:'approval'}, '', '');
   refreshAll(); showPage('dashboard');
+  fetchAssetMeta();
+}
+
+// ══════════════════════════════════════════════════════════
+//  STRUCTURED FORM — 비용 결재용 정형 양식 (자산관리 자동 연동)
+// ══════════════════════════════════════════════════════════
+const ASSET_API_BASE = 'https://routesystem-nas.tail66c283.ts.net';
+let assetProjects = [];
+let assetCategories = [];
+let currentStructuredKind = null;   // 'card_expense' | 'payroll' | 'recurring' | null
+let payrollPayees = [];              // 외주비/급여 지급명세 행 배열
+
+async function fetchAssetMeta() {
+  try {
+    const [pr, cr] = await Promise.all([
+      fetch(ASSET_API_BASE + '/asset-projects').then(r => r.json()),
+      fetch(ASSET_API_BASE + '/asset-categories').then(r => r.json())
+    ]);
+    if (Array.isArray(pr)) assetProjects = pr;
+    if (Array.isArray(cr)) assetCategories = cr;
+  } catch(e) {
+    console.warn('Asset meta fetch failed:', e);
+  }
+}
+
+function projectOptions(selected) {
+  return '<option value="">— 선택 / Select Project —</option>' +
+    assetProjects.map(p => `<option value="${p}"${p===selected?' selected':''}>${p}</option>`).join('');
+}
+function categoryOptions(selected) {
+  return '<option value="">— 선택 / Select Category —</option>' +
+    assetCategories.map(c => `<option value="${c}"${c===selected?' selected':''}>${c}</option>`).join('');
+}
+
+function showStructuredPanel(kind, data) {
+  currentStructuredKind = kind;
+  data = data || {};
+  document.getElementById('docContentWrapper').style.display = 'none';
+  const p = document.getElementById('structuredPanel');
+  p.style.display = '';
+  if (kind === 'card_expense') p.innerHTML = renderCardExpenseForm(data);
+  else if (kind === 'payroll') p.innerHTML = renderPayrollForm(data);
+  else if (kind === 'recurring') p.innerHTML = renderRecurringForm(data);
+  else { hideStructuredPanel(); return; }
+  // 첫 렌더 후 미리보기 갱신
+  renderStructuredContent();
+}
+
+function hideStructuredPanel() {
+  currentStructuredKind = null;
+  payrollPayees = [];
+  document.getElementById('structuredPanel').innerHTML = '';
+  document.getElementById('structuredPanel').style.display = 'none';
+  document.getElementById('docContentWrapper').style.display = '';
+}
+
+// ── 카드 비용청구 ──
+function renderCardExpenseForm(d) {
+  return `
+    <div style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:14px;margin-bottom:1rem;">
+      <div style="font-size:0.9rem;color:var(--primary);font-weight:600;margin-bottom:0.8rem;">💳 카드 비용청구 / Card Expense (자산관리 자동 입력)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+        <div><label class="field-label">사용일자 *</label><input class="field-input" type="date" id="se_date" value="${d.date||''}" oninput="renderStructuredContent()"/></div>
+        <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="number" step="0.01" id="se_amount" value="${d.amount||''}" oninput="renderStructuredContent()" placeholder="0.00"/></div>
+        <div><label class="field-label">사용처 / Vendor *</label><input class="field-input" type="text" id="se_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="Amazon, Home Depot, Chevron 등"/></div>
+        <div><label class="field-label">카테고리 *</label><select class="field-input" id="se_category" onchange="renderStructuredContent()">${categoryOptions(d.category)}</select></div>
+        <div style="grid-column:1/3;"><label class="field-label">프로젝트 *</label><select class="field-input" id="se_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
+        <div style="grid-column:1/3;"><label class="field-label">사용 목적 / Purpose *</label><textarea class="field-input-white" id="se_purpose" oninput="renderStructuredContent()" style="min-height:60px;">${d.purpose||''}</textarea></div>
+      </div>
+    </div>
+    <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input-white" id="docContent" readonly style="min-height:140px;background:rgba(255,255,255,0.03);"></textarea></div>
+  `;
+}
+
+// ── 외주비/급여 ──
+function renderPayrollForm(d) {
+  payrollPayees = (d.payees && d.payees.length) ? [...d.payees] : [{name:'',amount:'',note:''}];
+  return `
+    <div style="background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:14px;margin-bottom:1rem;">
+      <div style="font-size:0.9rem;color:var(--secondary);font-weight:600;margin-bottom:0.8rem;">💼 외주비/급여 지급요청 (자산관리 자동 입력)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+        <div><label class="field-label">산정기간 시작 *</label><input class="field-input" type="date" id="pr_startDate" value="${d.startDate||''}" oninput="renderStructuredContent()"/></div>
+        <div><label class="field-label">산정기간 종료 *</label><input class="field-input" type="date" id="pr_endDate" value="${d.endDate||''}" oninput="renderStructuredContent()"/></div>
+        <div><label class="field-label">업체명 / Vendor *</label><input class="field-input" type="text" id="pr_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="티아이테크 등"/></div>
+        <div><label class="field-label">카테고리 *</label><select class="field-input" id="pr_category" onchange="renderStructuredContent()">${categoryOptions(d.category||'재료비')}</select></div>
+        <div style="grid-column:1/3;"><label class="field-label">프로젝트 *</label><select class="field-input" id="pr_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
+        <div style="grid-column:1/3;margin-top:0.5rem;">
+          <label class="field-label">지급명세 (KRW) *</label>
+          <div id="pr_payeeList"></div>
+          <button type="button" class="btn btn-outline" style="margin-top:0.4rem;" onclick="addPayrollPayee()">+ 행 추가</button>
+        </div>
+        <div><label class="field-label">환율 (KRW/USD) *</label><input class="field-input" type="number" step="0.01" id="pr_rate" value="${d.rate||''}" oninput="renderStructuredContent()" placeholder="1475.53"/></div>
+        <div><label class="field-label">환율 설명</label><input class="field-input" type="text" id="pr_rateDesc" value="${d.rateDesc||'3개월 평균 환율'}" oninput="renderStructuredContent()"/></div>
+        <div><label class="field-label">총액 KRW (자동)</label><input class="field-input" type="text" id="pr_totalKRW" readonly style="background:rgba(255,255,255,0.03);"/></div>
+        <div><label class="field-label">총액 USD (자동)</label><input class="field-input" type="text" id="pr_totalUSD" readonly style="background:rgba(255,255,255,0.03);"/></div>
+      </div>
+    </div>
+    <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input-white" id="docContent" readonly style="min-height:180px;background:rgba(255,255,255,0.03);"></textarea></div>
+  `;
+}
+
+function renderPayrollPayeeRows() {
+  const list = document.getElementById('pr_payeeList'); if (!list) return;
+  list.innerHTML = payrollPayees.map((p, i) => `
+    <div style="display:grid;grid-template-columns:1fr 1fr 2fr auto;gap:0.4rem;margin-bottom:0.4rem;">
+      <input class="field-input" placeholder="이름" value="${p.name||''}" oninput="payrollPayees[${i}].name=this.value;renderStructuredContent()"/>
+      <input class="field-input" type="number" step="1" placeholder="금액 KRW" value="${p.amount||''}" oninput="payrollPayees[${i}].amount=this.value;renderStructuredContent()"/>
+      <input class="field-input" placeholder="비고 (선택)" value="${p.note||''}" oninput="payrollPayees[${i}].note=this.value;renderStructuredContent()"/>
+      ${payrollPayees.length>1?`<button type="button" class="btn-remove-approver" onclick="removePayrollPayee(${i})">✕</button>`:'<span></span>'}
+    </div>
+  `).join('');
+}
+
+function addPayrollPayee() { payrollPayees.push({name:'',amount:'',note:''}); renderPayrollPayeeRows(); renderStructuredContent(); }
+function removePayrollPayee(i) { payrollPayees.splice(i,1); renderPayrollPayeeRows(); renderStructuredContent(); }
+
+// ── 정기 지출 ──
+function renderRecurringForm(d) {
+  return `
+    <div style="background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:14px;margin-bottom:1rem;">
+      <div style="font-size:0.9rem;color:var(--success);font-weight:600;margin-bottom:0.8rem;">📅 정기 지출 / Recurring Expense (자산관리 자동 입력)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+        <div><label class="field-label">청구월 *</label><input class="field-input" type="month" id="re_billingMonth" value="${d.billingMonth||''}" oninput="renderStructuredContent()"/></div>
+        <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="number" step="0.01" id="re_amount" value="${d.amount||''}" oninput="renderStructuredContent()"/></div>
+        <div><label class="field-label">업체 / Vendor *</label><input class="field-input" type="text" id="re_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="임대료/보험사/통신사 등"/></div>
+        <div><label class="field-label">카테고리 *</label><select class="field-input" id="re_category" onchange="renderStructuredContent()">${categoryOptions(d.category)}</select></div>
+        <div style="grid-column:1/3;"><label class="field-label">프로젝트 *</label><select class="field-input" id="re_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
+        <div style="grid-column:1/3;"><label class="field-label">비고</label><textarea class="field-input-white" id="re_note" oninput="renderStructuredContent()" style="min-height:60px;">${d.note||''}</textarea></div>
+      </div>
+    </div>
+    <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input-white" id="docContent" readonly style="min-height:140px;background:rgba(255,255,255,0.03);"></textarea></div>
+  `;
+}
+
+// ── 미리보기 렌더링 (구조화 데이터 → 텍스트) ──
+function renderStructuredContent() {
+  const kind = currentStructuredKind;
+  if (!kind) return;
+  let txt = '';
+  if (kind === 'card_expense') {
+    const date = v('se_date'), vendor = v('se_vendor'), cat = v('se_category'),
+          proj = v('se_project'), amount = v('se_amount'), purpose = v('se_purpose');
+    txt = `사용일자: ${date}
+사용처: ${vendor}
+카테고리: ${cat}
+프로젝트: ${proj}
+금액: $ ${fmtNum(amount)}
+
+[사용 목적]
+${purpose || ''}`;
+  } else if (kind === 'payroll') {
+    if (document.getElementById('pr_payeeList')) renderPayrollPayeeRows();
+    const startDate = v('pr_startDate'), endDate = v('pr_endDate'), vendor = v('pr_vendor'),
+          cat = v('pr_category'), proj = v('pr_project'),
+          rate = parseFloat(v('pr_rate'))||0, rateDesc = v('pr_rateDesc');
+    const totalKRW = payrollPayees.reduce((s,p)=>s+(parseFloat(p.amount)||0),0);
+    const totalUSD = rate>0 ? totalKRW/rate : 0;
+    if (document.getElementById('pr_totalKRW')) document.getElementById('pr_totalKRW').value = totalKRW>0?fmtKRW(totalKRW)+' 원':'';
+    if (document.getElementById('pr_totalUSD')) document.getElementById('pr_totalUSD').value = totalUSD>0?'$ '+fmtNum(totalUSD):'';
+    const payeeLines = payrollPayees.filter(p=>p.name).map(p=>{
+      const amt = fmtKRW(parseFloat(p.amount)||0);
+      const note = p.note ? ` (${p.note})` : '';
+      return `   - ${p.name}: ${amt}원${note}`;
+    }).join('\n');
+    txt = `${vendor} ${startDate}~${endDate} 지급 요청의 건으로 상신드립니다.
+
+1. 산정기간: ${startDate} ~ ${endDate}
+2. 카테고리: ${cat}
+3. 프로젝트: ${proj}
+4. 지급정보:
+${payeeLines}
+5. 총지급액: ${fmtKRW(totalKRW)}원
+            = $ ${fmtNum(totalUSD)} (${rateDesc} ${fmtKRW(rate)}원 적용)
+
+이상입니다.`;
+  } else if (kind === 'recurring') {
+    const month = v('re_billingMonth'), vendor = v('re_vendor'), cat = v('re_category'),
+          proj = v('re_project'), amount = v('re_amount'), note = v('re_note');
+    txt = `청구월: ${month}
+업체: ${vendor}
+카테고리: ${cat}
+프로젝트: ${proj}
+금액: $ ${fmtNum(amount)}
+
+[비고]
+${note || ''}`;
+  }
+  const dc = document.getElementById('docContent');
+  if (dc) dc.value = txt;
+}
+
+function v(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+function fmtNum(n) { const x = parseFloat(n); return isNaN(x)?'0.00':x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtKRW(n) { const x = parseFloat(n); return isNaN(x)?'0':Math.round(x).toLocaleString('en-US'); }
+
+// ── 구조화 데이터 수집 (Firestore 저장용) ──
+function collectStructuredData() {
+  const kind = currentStructuredKind;
+  if (!kind) return null;
+  if (kind === 'card_expense') {
+    return { kind, date:v('se_date'), vendor:v('se_vendor'), category:v('se_category'),
+             project:v('se_project'), amount:parseFloat(v('se_amount'))||0, purpose:v('se_purpose') };
+  }
+  if (kind === 'payroll') {
+    const rate = parseFloat(v('pr_rate'))||0;
+    const totalKRW = payrollPayees.reduce((s,p)=>s+(parseFloat(p.amount)||0),0);
+    const totalUSD = rate>0 ? totalKRW/rate : 0;
+    return { kind, startDate:v('pr_startDate'), endDate:v('pr_endDate'), vendor:v('pr_vendor'),
+             category:v('pr_category'), project:v('pr_project'),
+             payees:payrollPayees.filter(p=>p.name||p.amount),
+             rate, rateDesc:v('pr_rateDesc'), totalKRW, totalUSD };
+  }
+  if (kind === 'recurring') {
+    return { kind, billingMonth:v('re_billingMonth'), vendor:v('re_vendor'), category:v('re_category'),
+             project:v('re_project'), amount:parseFloat(v('re_amount'))||0, note:v('re_note') };
+  }
+  return null;
+}
+
+function validateStructured() {
+  const d = collectStructuredData(); if (!d) return null;
+  if (d.kind === 'card_expense') {
+    if (!d.date || !d.vendor || !d.category || !d.project || !d.amount || !d.purpose) return '모든 필드(사용일자/사용처/카테고리/프로젝트/금액/사용목적)를 입력하세요.';
+  } else if (d.kind === 'payroll') {
+    if (!d.startDate || !d.endDate || !d.vendor || !d.category || !d.project || !d.rate) return '필수 항목(기간/업체/카테고리/프로젝트/환율)을 입력하세요.';
+    if (!d.payees.length || d.payees.some(p=>!p.name||!p.amount)) return '지급명세 행에 이름과 금액을 모두 입력하세요.';
+  } else if (d.kind === 'recurring') {
+    if (!d.billingMonth || !d.vendor || !d.category || !d.project || !d.amount) return '모든 필수 필드를 입력하세요.';
+  }
+  return null;
 }
 function backToHub() {
   document.getElementById('app').style.display = 'none';
@@ -1085,6 +1317,7 @@ function initNewPage() {
   document.getElementById('draftBtn').style.display   = 'inline-flex';
   document.getElementById('cancelEditBtn').style.display = 'none';
   document.getElementById('editModeBanner').style.display = 'none';
+  hideStructuredPanel();
   setTimeout(() => { const t = document.getElementById('docTitle'); if(t) t.focus(); }, 100);
 }
 
@@ -1117,7 +1350,16 @@ function editDoc(docId) {
     }
     document.getElementById('docPriority').value = doc.priority || 'Normal';
     document.getElementById('docTitle').value    = doc.title    || '';
-    document.getElementById('docContent').value  = doc.content  || '';
+
+    // 정형 양식 복원 (doc.structuredData가 있으면)
+    if (doc.structuredData && doc.structuredData.kind) {
+      showStructuredPanel(doc.structuredData.kind, doc.structuredData);
+      if (doc.structuredData.kind === 'payroll') renderPayrollPayeeRows();
+      renderStructuredContent();
+    } else {
+      hideStructuredPanel();
+      document.getElementById('docContent').value = doc.content || '';
+    }
 
     // 결재라인 복원
     approverRows = [];
@@ -1355,8 +1597,9 @@ function refreshTemplateDropdown() {
   const sel = document.getElementById('docType');
   if (!sel) return;
   const cur = sel.value;
+  const visible = templates.filter(t => !t.archived);
   sel.innerHTML = '<option value="">— 선택 / Select —</option>' +
-    templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('') +
+    visible.map(t => `<option value="${t.id}">${t.name}</option>`).join('') +
     '<option value="__other__">기타 / Other</option>';
   // 기존 선택값 유지 — 템플릿 ID 또는 __other__ 또는 (호환성) 과거 문자열
   if (cur) {
@@ -1372,21 +1615,28 @@ function refreshTemplateDropdown() {
 
 function onDocTypeChange() {
   const id = document.getElementById('docType').value;
-  if (!id || id === '__other__') return;
+  // 정형 폼이 활성화된 상태에서 다른 타입으로 변경 시 폼 정리
+  if (!id || id === '__other__') { hideStructuredPanel(); return; }
   const t = templates.find(x => x.id === id);
-  if (!t) return;
+  if (!t) { hideStructuredPanel(); return; }
   applyApprovalTemplate(t);
 }
 
 function applyApprovalTemplate(t) {
   if (!t) return;
 
-  // 본문 양식 채우기 (기존 본문이 있으면 확인)
-  if (t.content_template) {
-    const docContent = document.getElementById('docContent');
-    const cur = (docContent.value || '').trim();
-    if (!cur || confirm('본문에 이미 입력된 내용이 있습니다.\n템플릿 양식으로 덮어쓸까요?')) {
-      docContent.value = t.content_template;
+  // 정형 양식 (template_kind 있음)이면 구조화 폼 표시, 아니면 일반 textarea 사용
+  if (t.template_kind) {
+    showStructuredPanel(t.template_kind, {});
+  } else {
+    hideStructuredPanel();
+    // 본문 양식 채우기 (기존 본문이 있으면 확인)
+    if (t.content_template) {
+      const docContent = document.getElementById('docContent');
+      const cur = (docContent.value || '').trim();
+      if (!cur || confirm('본문에 이미 입력된 내용이 있습니다.\n템플릿 양식으로 덮어쓸까요?')) {
+        docContent.value = t.content_template;
+      }
     }
   }
 
@@ -1622,8 +1872,20 @@ function submitDoc(status) {
   const selApprovers = approverRows.filter(id => id);
   const selCc        = ccRows.filter(id => id);
 
+  // 정형 양식 사용 중이면 검증 + content 자동 생성
+  let structuredData = null;
+  if (currentStructuredKind) {
+    if (status === 'pending') {
+      const err = validateStructured();
+      if (err) { alert(err); return; }
+    }
+    renderStructuredContent();  // docContent 최신 갱신
+    structuredData = collectStructuredData();
+  }
+  const contentFinal = document.getElementById('docContent').value.trim();
+
   if (status === 'pending') {
-    if (!type || !title || !content) { alert('Please fill in all required fields.'); return; }
+    if (!type || !title || !contentFinal) { alert('Please fill in all required fields.'); return; }
     if (!selApprovers.length) { alert('Please add at least one approver.'); return; }
     if (new Set(selApprovers).size !== selApprovers.length) { alert('Duplicate approvers found.'); return; }
     const overlap = selCc.filter(c => selApprovers.includes(c));
@@ -1648,13 +1910,14 @@ function submitDoc(status) {
 
     const updatedDoc = {
       ...oldDoc,
-      type, title, content, priority,
+      type, title, content: contentFinal, priority,
       approvers: approversData,
       cc: selCc,
       approverId: selApprovers[0] || '',
       currentStep: 0,
       status: isDraftSave ? 'draft' : 'pending',
       attachments: [...uploadedFiles],
+      structuredData: structuredData || oldDoc.structuredData || null,
       history: [
         ...(oldDoc.history || []),
         { action: histAction, by: currentUser.id, at: Date.now(), comment: histComment }
@@ -1688,15 +1951,17 @@ function submitDoc(status) {
     id: 'doc_' + Date.now(), docNo, type, title,
     approvers: approversData, cc: selCc,
     approverId: selApprovers[0] || '',
-    requesterId: currentUser.id, content, priority, status,
+    requesterId: currentUser.id, content: contentFinal, priority, status,
     currentStep: 0, createdAt: Date.now(),
     history: [{ action: status==='draft'?'draft':'submitted', by: currentUser.id, at: Date.now(), comment:'' }],
-    attachments: [...uploadedFiles]
+    attachments: [...uploadedFiles],
+    structuredData: structuredData || null
   };
   saveDoc(docData).then(() => {
     saveData();
     ['docType','docTitle','docContent'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('docPriority').value = 'Normal';
+    hideStructuredPanel();
     uploadedFiles = []; renderFileList();
     buildApproverLine(); buildCcLine();
     if (status === 'pending' && approversData.length > 0) sendEmail(approversData[0].id, docData, 'submitted', '');
@@ -1817,9 +2082,83 @@ async function doApprove(action) {
   await saveDoc(doc); saveData();
   closeModal('approveModal');
   const stepNum = step;
-  if (action === 'approve' && doc.status === 'approved') alert('✓ All steps approved!');
+
+  // ★ 최종 승인 & 정형 데이터 있음 → 자산관리 자동 sync
+  let syncMsg = '';
+  if (doc.status === 'approved' && doc.structuredData && doc.structuredData.kind && !doc.assetTxId) {
+    const syncResult = await syncDocToAssetManager(doc);
+    if (syncResult.ok) {
+      doc.assetTxId = syncResult.tx_id;
+      doc.syncStatus = 'synced';
+      doc.syncedAt = Date.now();
+      await saveDoc(doc); saveData();
+      syncMsg = '\n✓ 자산관리에 자동 입력 완료 (TX: ' + syncResult.tx_id.slice(0,8) + ')';
+    } else {
+      doc.syncStatus = 'failed';
+      doc.syncError = syncResult.error || 'unknown';
+      await saveDoc(doc); saveData();
+      syncMsg = '\n⚠️ 자산관리 자동 입력 실패: ' + (syncResult.error || '확인 필요');
+    }
+  }
+
+  if (action === 'approve' && doc.status === 'approved') alert('✓ All steps approved!' + syncMsg);
   else if (action === 'approve') alert('✓ Step ' + (stepNum+1) + ' approved. Forwarded to Step ' + (stepNum+2) + '.');
   else alert('✕ Document rejected.');
+}
+
+// ── 자산관리 자동 입력 (최종 승인 시 호출) ──
+async function syncDocToAssetManager(doc) {
+  const sd = doc.structuredData || {};
+  const kind = sd.kind;
+  if (!kind) return { ok:false, error:'no structured data' };
+
+  let payload = { source_doc_no: doc.docNo, attachments: doc.attachments || [], type:'매입' };
+  if (kind === 'card_expense') {
+    payload.date = sd.date;
+    payload.vendor = sd.vendor;
+    payload.category = sd.category;
+    payload.project = sd.project;
+    payload.amount = sd.amount;
+    payload.note = doc.content || '';
+  } else if (kind === 'payroll') {
+    payload.date = sd.endDate;
+    payload.vendor = sd.vendor;
+    payload.category = sd.category;
+    payload.project = sd.project;
+    payload.amount = sd.totalUSD;
+    payload.note = doc.content || '';
+  } else if (kind === 'recurring') {
+    // 청구월 'YYYY-MM' → 해당 월 말일
+    let date = sd.billingMonth;
+    if (date && /^\d{4}-\d{2}$/.test(date)) {
+      const [y, m] = date.split('-').map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+      date = `${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+    }
+    payload.date = date;
+    payload.vendor = sd.vendor;
+    payload.category = sd.category;
+    payload.project = sd.project;
+    payload.amount = sd.amount;
+    payload.note = doc.content || '';
+  }
+  try {
+    const r = await fetch(ASSET_API_BASE + '/sync-asset-manager', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.asset_response && j.asset_response.success) {
+      return { ok:true, tx_id: j.asset_response.tx_id };
+    }
+    if (j.asset_response && j.asset_response.error === 'already_synced') {
+      return { ok:true, tx_id: j.asset_response.tx_id };  // 중복은 성공 처리
+    }
+    return { ok:false, error: (j.asset_response && j.asset_response.error) || j.error || 'HTTP '+r.status };
+  } catch(e) {
+    return { ok:false, error: 'network: ' + e.message };
+  }
 }
 
 async function deleteDoc(docId) {
