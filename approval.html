@@ -1055,7 +1055,7 @@ function renderCardExpenseForm(d) {
         <div style="grid-column:1/3;"><label class="field-label">사용 목적 / Purpose *</label><textarea class="field-input-white" id="se_purpose" oninput="renderStructuredContent()" style="min-height:60px;">${d.purpose||''}</textarea></div>
       </div>
     </div>
-    <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input-white" id="docContent" readonly style="min-height:140px;background:rgba(255,255,255,0.03);"></textarea></div>
+    <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input" id="docContent" readonly style="min-height:140px;background:rgba(99,102,241,0.05);border-style:dashed;font-family:monospace;white-space:pre-wrap;"></textarea></div>
   `;
 }
 
@@ -1082,7 +1082,7 @@ function renderPayrollForm(d) {
         <div><label class="field-label">총액 USD (자동)</label><input class="field-input" type="text" id="pr_totalUSD" readonly style="background:rgba(255,255,255,0.03);"/></div>
       </div>
     </div>
-    <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input-white" id="docContent" readonly style="min-height:180px;background:rgba(255,255,255,0.03);"></textarea></div>
+    <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input" id="docContent" readonly style="min-height:180px;background:rgba(99,102,241,0.05);border-style:dashed;font-family:monospace;white-space:pre-wrap;"></textarea></div>
   `;
 }
 
@@ -1115,7 +1115,7 @@ function renderRecurringForm(d) {
         <div style="grid-column:1/3;"><label class="field-label">비고</label><textarea class="field-input-white" id="re_note" oninput="renderStructuredContent()" style="min-height:60px;">${d.note||''}</textarea></div>
       </div>
     </div>
-    <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input-white" id="docContent" readonly style="min-height:140px;background:rgba(255,255,255,0.03);"></textarea></div>
+    <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input" id="docContent" readonly style="min-height:140px;background:rgba(99,102,241,0.05);border-style:dashed;font-family:monospace;white-space:pre-wrap;"></textarea></div>
   `;
 }
 
