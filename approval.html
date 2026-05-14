@@ -1023,12 +1023,12 @@ function projectOptions(selected) {
     assetProjects.map(p => `<option value="${p}"${p===selected?' selected':''}>${p}</option>`).join('');
 }
 
-// 템플릿별 카테고리 화이트리스트 (Tim 확정 후 채울 예정)
-// 비어 있으면 전체 노출 — 확정 카테고리 받으면 각 배열에 추가
+// 템플릿별 카테고리 화이트리스트 (Tim 확정 2026-05-14)
+// 자산관리에 등록된 정확한 이름과 일치해야 함
 const CATEGORY_WHITELIST = {
-  card_expense: [],   // ex: ['식비','출장비','소모품비',...]
-  payroll:      [],   // ex: ['재료비','원재료','급여(직원)',...]
-  recurring:    [],   // ex: ['임대료','보험료','통신비',...]
+  card_expense: ['경상개발비','교육훈련비','운반비','복리후생비(식비)','복리후생비(접대)','비품(자산)','소모품비','여비교통비','차량유지비'],
+  payroll:      ['급여(프리)','급여(직원)','원재료','지급임차료'],
+  recurring:    ['통신비','보험료','세금과공과'],
 };
 
 function categoryOptions(selected, kind) {
