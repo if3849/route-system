@@ -1724,21 +1724,32 @@ function buildActions(doc, mode) {
   if (mode === 'mine' && (doc.status === 'rejected' || doc.status === 'draft') && doc.requesterId === currentUser.id) {
     b += ` <button class="btn-sm" style="background:var(--blue);color:white;" onclick="editDoc('${doc.id}')">Edit</button>`;
   }
-  // ★ Amazon 구매 요청 승인 완료 시 — 본인 문서에서 PO 복사 + Amazon 열기
+  // 결제 완료 상태 판정 (history에 amount_updated가 있으면 = 직원이 실제 결제 후 금액 확인 완료)
+  const purchaseComplete = (doc.history || []).some(h => h.action === 'amount_updated');
+
+  // ★ Amazon 구매 요청 — 결제 완료 전에는 PO 복사 버튼, 완료 후에는 "✓ 결제 완료" 배지
   if (mode === 'mine'
       && doc.status === 'approved'
       && doc.requesterId === currentUser.id
       && doc.structuredData && doc.structuredData.kind === 'purchase_request') {
-    b += ` <button class="btn-sm" style="background:#ff9900;color:#000;font-weight:600;" onclick="openAmazonWithPO('${doc.docNo}','${doc.structuredData.link?encodeURIComponent(doc.structuredData.link):''}')">🛒 Amazon (PO 복사)</button>`;
+    if (purchaseComplete) {
+      b += ` <span style="display:inline-block;background:rgba(16,185,129,0.15);color:#10b981;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:700;border:1px solid #10b981;">✓ Amazon 결제 완료</span>`;
+    } else {
+      b += ` <button class="btn-sm" style="background:#ff9900;color:#000;font-weight:600;" onclick="openAmazonWithPO('${doc.docNo}','${doc.structuredData.link?encodeURIComponent(doc.structuredData.link):''}')">🛒 Amazon (PO 복사)</button>`;
+    }
   }
-  // ★ 승인 + 자산관리 동기화 완료된 본인 비용 결재에 결제액 갱신 버튼 (Amazon 결제 후 실제 금액 보정 등)
+  // ★ 결제액 갱신 — 완료 전에는 큰 버튼, 완료 후에는 작은 outline (오타·수정 가능)
   if (mode === 'mine'
       && doc.status === 'approved'
       && doc.requesterId === currentUser.id
       && doc.assetTxId
       && doc.structuredData && doc.structuredData.kind
-      && doc.structuredData.kind !== 'payroll') {  // payroll은 명세 구조라 별도 처리 필요
-    b += ` <button class="btn-sm" style="background:#fbbf24;color:#000;font-weight:600;" onclick="updateActualAmount('${doc.id}')">💰 결제액 갱신</button>`;
+      && doc.structuredData.kind !== 'payroll') {
+    if (purchaseComplete) {
+      b += ` <button class="btn-sm btn-sm-outline" style="font-size:11px;padding:3px 8px;" onclick="updateActualAmount('${doc.id}')" title="금액 재수정">💰 수정</button>`;
+    } else {
+      b += ` <button class="btn-sm" style="background:#fbbf24;color:#000;font-weight:600;" onclick="updateActualAmount('${doc.id}')">💰 결제액 갱신</button>`;
+    }
   }
   if (mode === 'mine' && (doc.status === 'draft' || doc.status === 'pending' || doc.status === 'rejected')) {
     b += ` <button class="btn-sm btn-sm-outline" onclick="deleteDoc('${doc.id}')">Delete</button>`;
