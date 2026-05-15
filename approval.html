@@ -1728,10 +1728,69 @@ function buildActions(doc, mode) {
       && doc.structuredData && doc.structuredData.kind === 'purchase_request') {
     b += ` <button class="btn-sm" style="background:#ff9900;color:#000;font-weight:600;" onclick="openAmazonWithPO('${doc.docNo}','${doc.structuredData.link?encodeURIComponent(doc.structuredData.link):''}')">🛒 Amazon (PO 복사)</button>`;
   }
+  // ★ 승인 + 자산관리 동기화 완료된 본인 비용 결재에 결제액 갱신 버튼 (Amazon 결제 후 실제 금액 보정 등)
+  if (mode === 'mine'
+      && doc.status === 'approved'
+      && doc.requesterId === currentUser.id
+      && doc.assetTxId
+      && doc.structuredData && doc.structuredData.kind
+      && doc.structuredData.kind !== 'payroll') {  // payroll은 명세 구조라 별도 처리 필요
+    b += ` <button class="btn-sm" style="background:#fbbf24;color:#000;font-weight:600;" onclick="updateActualAmount('${doc.id}')">💰 결제액 갱신</button>`;
+  }
   if (mode === 'mine' && (doc.status === 'draft' || doc.status === 'pending' || doc.status === 'rejected')) {
     b += ` <button class="btn-sm btn-sm-outline" onclick="deleteDoc('${doc.id}')">Delete</button>`;
   }
   return b;
+}
+
+// ── 사후 결제액 갱신 (실제 결제액 확인 후 자산관리 함께 보정) ──
+async function updateActualAmount(docId) {
+  const doc = docs.find(d => d.id === docId);
+  if (!doc) return;
+  if (!doc.assetTxId) { alert('자산관리에 동기화되지 않은 문서입니다.'); return; }
+  const sd = doc.structuredData || {};
+  const currentAmount = parseFloat(sd.amount) || 0;
+  const input = prompt(
+    `실제 결제액(Tax 포함 최종 금액)을 입력하세요.\n\n현재 금액: $ ${fmtNum(currentAmount)}\n\n새 금액 (USD, 콤마 가능):`,
+    fmtNum(currentAmount)
+  );
+  if (input === null) return;
+  const newAmount = parseFormattedNumber(input);
+  if (newAmount <= 0) { alert('유효한 금액이 아닙니다.'); return; }
+  if (Math.abs(newAmount - currentAmount) < 0.005) { alert('금액 변동 없음.'); return; }
+  if (!confirm(`결제액을 변경합니다.\n$ ${fmtNum(currentAmount)}  →  $ ${fmtNum(newAmount)}\n\n자산관리도 자동 갱신됩니다. 진행할까요?`)) return;
+
+  try {
+    const r = await fetch(ASSET_API_BASE + '/update-asset-amount', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tx_id: doc.assetTxId, amount: newAmount })
+    });
+    const j = await r.json();
+    if (!(j.asset_response && j.asset_response.success)) {
+      const err = (j.asset_response && j.asset_response.error) || j.error || `HTTP ${r.status}`;
+      alert('갱신 실패: ' + err);
+      return;
+    }
+    // Firestore doc 갱신: structuredData.amount + history + content (금액 라인 치환)
+    const newSD = { ...sd, amount: newAmount };
+    const newHistory = [
+      ...(doc.history || []),
+      { action: 'amount_updated', by: currentUser.id, at: Date.now(),
+        comment: `결제액 갱신: $${fmtNum(currentAmount)} → $${fmtNum(newAmount)}` }
+    ];
+    let newContent = doc.content || '';
+    // "금액: $ 123.45" 또는 "금액: $ 1,234.56" 패턴 치환
+    newContent = newContent.replace(/(금액:\s*\$\s*)[\d,]+\.?\d*/, `$1${fmtNum(newAmount)}`);
+    // 갱신 메모 추가
+    const ts = new Date().toLocaleString('ko-KR');
+    newContent += `\n\n[결제액 갱신 ${ts}] $${fmtNum(currentAmount)} → $${fmtNum(newAmount)}`;
+    const updatedDoc = { ...doc, structuredData: newSD, history: newHistory, content: newContent };
+    await saveDoc(updatedDoc);
+    alert(`✓ 결제액 갱신 완료.\n자산관리도 동기화됐습니다.\n새 금액: $ ${fmtNum(newAmount)}`);
+  } catch(e) {
+    alert('갱신 오류: ' + (e.message || e));
+  }
 }
 
 // ── Amazon 구매 요청 — PO 클립보드 복사 + Amazon 열기 ──
