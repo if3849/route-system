@@ -469,7 +469,7 @@
           <textarea class="field-input-white" id="docContent" placeholder="Describe the purpose and details..." style="min-height:120px;"></textarea>
         </div>
         <div class="form-group">
-          <label class="field-label">📎 파일 첨부</label>
+          <label class="field-label">📎 파일 첨부 <span style="font-weight:400;color:var(--mid);font-size:0.75rem;margin-left:8px;">💡 Win+Shift+S 또는 ⌘+Shift+5로 캡쳐 후 Ctrl+V (또는 ⌘+V) 로 바로 첨부 가능</span></label>
           <div id="fileList" style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.5rem;"></div>
           <div style="display:flex;gap:0.5rem;">
             <input type="file" id="fileInput" multiple style="flex:1;" class="field-input"/>
@@ -857,6 +857,57 @@ function renderFileList() {
 }
 function removeFile(i) { uploadedFiles.splice(i, 1); renderFileList(); }
 
+// ── 클립보드에서 이미지 붙여넣기 (Win+Shift+S 등 스크린샷 → Ctrl+V) ──
+async function uploadBlobAsFile(blob, suggestedName) {
+  const ext = (blob.type.split('/')[1] || 'png').replace('jpeg','jpg');
+  const name = suggestedName || `screenshot_${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.${ext}`;
+  const file = new File([blob], name, { type: blob.type });
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await fetch('https://routesystem-nas.tail66c283.ts.net/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!data.url) throw new Error(data.error || 'upload failed');
+    uploadedFiles.push({ name, url: `https://routesystem-nas.tail66c283.ts.net${data.url}` });
+    renderFileList();
+    return true;
+  } catch(e) {
+    alert('붙여넣기 업로드 실패: ' + (e.message || e));
+    return false;
+  }
+}
+
+// 전역 paste 핸들러 — 결재 작성 페이지에서만 이미지 클립보드 처리
+document.addEventListener('paste', async (e) => {
+  // 결재 작성 페이지 활성 + 입력 가능 textarea/input에 포커스 있을 때만 (편집 방해 X)
+  const activePage = document.getElementById('page-new');
+  if (!activePage || !activePage.classList.contains('active')) return;
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const blob = item.getAsFile();
+      if (blob) {
+        e.preventDefault();
+        await uploadBlobAsFile(blob);
+      }
+      return;
+    }
+  }
+});
+
+// Amazon 링크 클립보드에서 붙여넣기 버튼
+async function pasteAmazonLinkFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text) { alert('클립보드가 비어 있습니다.'); return; }
+    const el = document.getElementById('ap_link');
+    if (el) { el.value = text.trim(); el.dispatchEvent(new Event('input')); }
+  } catch(e) {
+    alert('클립보드 읽기 실패. Amazon 페이지 URL을 직접 복사해서 붙여넣어주세요.');
+  }
+}
+
 // ── 확대 편집 (target 필드 지원) ──
 let _expandTargetId = 'docContent';
 function openExpandEditor(targetId) {
@@ -1166,7 +1217,13 @@ function renderAmazonPurchaseForm(d) {
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div style="grid-column:1/3;"><label class="field-label">품목명 / Item *</label><input class="field-input" type="text" id="ap_item" value="${(d.item||'').replace(/"/g,'&quot;')}" oninput="renderStructuredContent()" placeholder="Dell 27인치 모니터, A4 복사용지 등"/></div>
-        <div style="grid-column:1/3;"><label class="field-label">Amazon 링크</label><input class="field-input" type="url" id="ap_link" value="${(d.link||'').replace(/"/g,'&quot;')}" oninput="renderStructuredContent()" placeholder="https://www.amazon.com/..."/></div>
+        <div style="grid-column:1/3;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+            <label class="field-label" style="margin-bottom:0;">Amazon 링크</label>
+            <button type="button" class="btn-expand-trigger" onclick="pasteAmazonLinkFromClipboard()">📋 클립보드에서 붙여넣기</button>
+          </div>
+          <input class="field-input" type="url" id="ap_link" value="${(d.link||'').replace(/"/g,'&quot;')}" oninput="renderStructuredContent()" placeholder="https://www.amazon.com/... (또는 위 버튼 클릭)"/>
+        </div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="ap_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'purchase_request')}</select></div>
         <div><label class="field-label">프로젝트 *</label><select class="field-input" id="ap_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
         <div><label class="field-label">수량</label><input class="field-input" type="number" min="1" step="1" id="ap_qty" value="${d.qty||1}" oninput="renderStructuredContent()"/></div>
@@ -1971,7 +2028,19 @@ function deleteTemplate(id) {
 }
 
 // ── ★ SUBMIT — 신규 + 재제출 통합 처리 ──
-function submitDoc(status) {
+// ── 원자적 문서 번호 발급 (Firestore 트랜잭션) — 동시 제출 race condition 방지 ──
+async function reserveNextDocNo() {
+  const ref = db.collection('meta').doc('counter');
+  return await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const cur = (snap.exists && snap.data().value) || 0;
+    const next = cur + 1;
+    tx.set(ref, { value: next });
+    return next;
+  });
+}
+
+async function submitDoc(status) {
   const typeRaw  = document.getElementById('docType').value;
   // 템플릿 ID는 사람이 읽을 수 있는 이름으로 변환해서 저장 (DB는 type 문자열만 보관)
   let type = typeRaw;
@@ -2058,9 +2127,16 @@ function submitDoc(status) {
     return;
   }
 
-  // ── 신규 문서 생성 ──
-  docCounter++;
-  const docNo = 'RSI-' + String(docCounter).padStart(4, '0');
+  // ── 신규 문서 생성 (원자적 채번) ──
+  let nextNum;
+  try {
+    nextNum = await reserveNextDocNo();
+  } catch(e) {
+    alert('문서 번호 발급 실패: ' + (e.message || e));
+    return;
+  }
+  docCounter = nextNum;
+  const docNo = 'RSI-' + String(nextNum).padStart(4, '0');
   const approversData = selApprovers.map(id => ({ id, status:'pending', comment:'', at:null }));
   const docData = {
     id: 'doc_' + Date.now(), docNo, type, title,
@@ -2073,7 +2149,6 @@ function submitDoc(status) {
     structuredData: structuredData || null
   };
   saveDoc(docData).then(() => {
-    saveData();
     ['docType','docTitle','docContent'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('docPriority').value = 'Normal';
     hideStructuredPanel();
