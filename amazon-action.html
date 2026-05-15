@@ -165,6 +165,15 @@ async function saveFinalAmount() {
       input.disabled = true;
       btn.textContent = '✓ 저장 완료';
       btn.style.background = '#10b981';
+    } else if (j.error === 'already_finalized') {
+      // 이미 결제액 입력이 완료된 경우 — 실수 방지 lock
+      result.innerHTML = '🔒 ' + (j.message || '이미 결제액 입력이 완료된 문서입니다. 수정이 필요하면 관리자에게 문의하세요.');
+      result.style.color = '#fbbf24';
+      result.style.display = 'block';
+      input.disabled = true;
+      btn.disabled = true;
+      btn.textContent = '🔒 잠김';
+      btn.style.background = '#6b7280';
     } else {
       result.textContent = '⚠️ ' + (j.error || '저장 실패');
       result.style.color = '#ef4444';

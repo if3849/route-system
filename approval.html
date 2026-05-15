@@ -1738,18 +1738,15 @@ function buildActions(doc, mode) {
       b += ` <button class="btn-sm" style="background:#ff9900;color:#000;font-weight:600;" onclick="openAmazonWithPO('${doc.docNo}','${doc.structuredData.link?encodeURIComponent(doc.structuredData.link):''}')">🛒 Amazon (PO 복사)</button>`;
     }
   }
-  // ★ 결제액 갱신 — 완료 전에는 큰 버튼, 완료 후에는 작은 outline (오타·수정 가능)
+  // ★ 결제액 갱신 — 완료 전에만 노출. 결제 완료 후엔 본인이 수정 불가 (실수 방지 — 관리자가 자산관리에서 직접 처리)
   if (mode === 'mine'
       && doc.status === 'approved'
       && doc.requesterId === currentUser.id
       && doc.assetTxId
       && doc.structuredData && doc.structuredData.kind
-      && doc.structuredData.kind !== 'payroll') {
-    if (purchaseComplete) {
-      b += ` <button class="btn-sm btn-sm-outline" style="font-size:11px;padding:3px 8px;" onclick="updateActualAmount('${doc.id}')" title="금액 재수정">💰 수정</button>`;
-    } else {
-      b += ` <button class="btn-sm" style="background:#fbbf24;color:#000;font-weight:600;" onclick="updateActualAmount('${doc.id}')">💰 결제액 갱신</button>`;
-    }
+      && doc.structuredData.kind !== 'payroll'
+      && !purchaseComplete) {
+    b += ` <button class="btn-sm" style="background:#fbbf24;color:#000;font-weight:600;" onclick="updateActualAmount('${doc.id}')">💰 결제액 갱신</button>`;
   }
   if (mode === 'mine' && (doc.status === 'draft' || doc.status === 'pending' || doc.status === 'rejected')) {
     b += ` <button class="btn-sm btn-sm-outline" onclick="deleteDoc('${doc.id}')">Delete</button>`;
