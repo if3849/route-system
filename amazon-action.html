@@ -55,6 +55,20 @@
   <div class="copied" id="copiedMsg">✓ PO가 클립보드에 복사되었습니다.</div>
   <div class="error" id="errorMsg"></div>
 
+  <!-- 결제 완료 후 실제 금액 입력 (액션 페이지에서 한 번에 마무리) -->
+  <div id="finalAmountSection" style="display:none;margin-top:24px;padding:20px;background:rgba(16,185,129,0.06);border:1px solid #10b981;border-radius:10px;">
+    <div style="font-size:13px;font-weight:700;color:#10b981;margin-bottom:10px;">✓ 결제 완료 후 실제 금액 입력</div>
+    <div style="font-size:12px;color:#8b949e;line-height:1.6;margin-bottom:14px;">Amazon 체크아웃에서 본 <strong style="color:#fbbf24;">최종 결제 금액 (Tax 포함)</strong>을 입력하세요. 자산관리에 자동 반영됩니다.</div>
+    <div style="display:flex;gap:8px;align-items:stretch;">
+      <span style="display:flex;align-items:center;padding:0 12px;background:#161b22;border:1px solid #30363d;border-right:none;border-radius:6px 0 0 6px;color:#8b949e;font-family:'IBM Plex Mono',monospace;font-weight:700;">$</span>
+      <input type="text" inputmode="decimal" id="finalAmount" placeholder="0.00"
+             oninput="formatAmount(this)"
+             style="flex:1;padding:12px;background:#161b22;border:1px solid #30363d;border-left:none;color:#e6edf3;font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;border-radius:0;outline:none;"/>
+      <button onclick="saveFinalAmount()" id="saveAmountBtn" style="padding:0 20px;background:#10b981;color:white;border:none;border-radius:0 6px 6px 0;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">💰 저장</button>
+    </div>
+    <div id="saveResult" style="margin-top:10px;font-size:13px;display:none;"></div>
+  </div>
+
   <a class="secondary" href="https://routesystemus.com/approval.html">결재 시스템 열기 →</a>
 
   <div class="steps">
@@ -62,6 +76,7 @@
     <div><b>2.</b> Amazon 장바구니 → Proceed to Checkout</div>
     <div><b>3.</b> "Purchase Order Number" 칸에서 <b>Ctrl+V</b> (또는 ⌘+V) 붙여넣기</div>
     <div><b>4.</b> Place Order → 결제 완료</div>
+    <div><b>5.</b> 이 페이지로 돌아와 <b>실제 결제액 (Tax 포함)</b> 입력 → 자산관리 자동 반영</div>
   </div>
 </div>
 
@@ -95,6 +110,75 @@ async function doAction() {
   }
   // Amazon 새 탭 열기
   window.open(link, '_blank', 'noopener');
+  // 결제 완료 후 실제 금액 입력 섹션 노출
+  const finalSec = document.getElementById('finalAmountSection');
+  finalSec.style.display = 'block';
+  finalSec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => document.getElementById('finalAmount').focus(), 600);
+}
+
+// 천단위 콤마 자동 포매팅 (소수점 2자리)
+function formatAmount(el) {
+  const before = el.value;
+  const cursorPos = el.selectionStart || before.length;
+  let val = before.replace(/[^\d.]/g, '');
+  const parts = val.split('.');
+  if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+  let [intPart, decPart] = val.split('.');
+  intPart = (intPart || '').replace(/^0+(?=\d)/, '') || (intPart===''?'':'0');
+  if (decPart !== undefined && decPart.length > 2) decPart = decPart.slice(0, 2);
+  const intFmt = intPart ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+  const formatted = intFmt + (decPart !== undefined ? '.' + decPart : (before.endsWith('.') ? '.' : ''));
+  if (formatted === before) return;
+  el.value = formatted;
+  const commasBefore = (before.slice(0, cursorPos).match(/,/g) || []).length;
+  const commasAfter = (formatted.slice(0, cursorPos).match(/,/g) || []).length;
+  const diff = commasAfter - commasBefore;
+  try { el.setSelectionRange(cursorPos + diff, cursorPos + diff); } catch(e) {}
+}
+
+async function saveFinalAmount() {
+  const input = document.getElementById('finalAmount');
+  const btn = document.getElementById('saveAmountBtn');
+  const result = document.getElementById('saveResult');
+  const amount = parseFloat((input.value || '').replace(/,/g, '')) || 0;
+  if (amount <= 0) {
+    result.textContent = '⚠️ 유효한 금액을 입력하세요.';
+    result.style.color = '#ef4444';
+    result.style.display = 'block';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '저장 중...';
+  result.style.display = 'none';
+  try {
+    const r = await fetch('https://routesystem-nas.tail66c283.ts.net/update-amount-by-po', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ po_no: po, amount: amount })
+    });
+    const j = await r.json();
+    if (j.success) {
+      result.innerHTML = `✓ 자산관리에 저장됨. <strong>$${j.previous_amount.toLocaleString('en-US',{minimumFractionDigits:2})}</strong> → <strong style="color:#10b981;">$${j.new_amount.toLocaleString('en-US',{minimumFractionDigits:2})}</strong>`;
+      result.style.color = '#10b981';
+      result.style.display = 'block';
+      input.disabled = true;
+      btn.textContent = '✓ 저장 완료';
+      btn.style.background = '#10b981';
+    } else {
+      result.textContent = '⚠️ ' + (j.error || '저장 실패');
+      result.style.color = '#ef4444';
+      result.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '💰 저장';
+    }
+  } catch(e) {
+    result.textContent = '⚠️ 네트워크 오류: ' + e.message;
+    result.style.color = '#ef4444';
+    result.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = '💰 저장';
+  }
 }
 </script>
 </body>
