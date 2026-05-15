@@ -469,12 +469,14 @@
           <textarea class="field-input-white" id="docContent" placeholder="Describe the purpose and details..." style="min-height:120px;"></textarea>
         </div>
         <div class="form-group">
-          <label class="field-label">📎 파일 첨부 <span style="font-weight:400;color:var(--mid);font-size:0.75rem;margin-left:8px;">💡 Win+Shift+S 또는 ⌘+Shift+5로 캡쳐 후 Ctrl+V (또는 ⌘+V) 로 바로 첨부 가능</span></label>
+          <label class="field-label">📎 파일 첨부</label>
           <div id="fileList" style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.5rem;"></div>
-          <div style="display:flex;gap:0.5rem;">
-            <input type="file" id="fileInput" multiple style="flex:1;" class="field-input"/>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <input type="file" id="fileInput" multiple style="flex:1;min-width:200px;" class="field-input"/>
             <button class="btn btn-outline" onclick="uploadFiles()" style="white-space:nowrap;">+ 업로드</button>
+            <button class="btn btn-outline" onclick="pasteClipboardImage()" style="white-space:nowrap;background:rgba(99,102,241,0.15);border-color:var(--primary);color:var(--primary);">📋 캡쳐 붙여넣기</button>
           </div>
+          <div style="font-size:0.72rem;color:var(--text-dim);margin-top:6px;">💡 캡쳐(Win+Shift+S 또는 ⌘+Shift+5) 후 위 <strong>"📋 캡쳐 붙여넣기"</strong> 버튼을 누르세요. 또는 빈 페이지 영역에서 Ctrl+V (⌘+V).</div>
         </div>
         <div style="display:flex;gap:1rem;margin-top:0.5rem;">
           <button class="btn btn-gold" id="submitBtn" onclick="submitDoc('pending')">Submit for Approval →</button>
@@ -896,6 +898,38 @@ document.addEventListener('paste', async (e) => {
   }
 });
 
+// 클립보드의 이미지(캡쳐) 직접 가져와 첨부 — Choose Files 팝업 회피용
+async function pasteClipboardImage() {
+  if (!navigator.clipboard || !navigator.clipboard.read) {
+    alert('이 브라우저는 클립보드 이미지 읽기를 지원하지 않습니다.\n빈 페이지 영역에서 Ctrl+V (⌘+V)를 사용하세요.');
+    return;
+  }
+  try {
+    const items = await navigator.clipboard.read();
+    let pasted = 0;
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith('image/')) {
+          const blob = await item.getType(type);
+          const ok = await uploadBlobAsFile(blob);
+          if (ok) pasted++;
+          break;
+        }
+      }
+    }
+    if (pasted === 0) {
+      alert('클립보드에 이미지가 없습니다.\nWin+Shift+S 또는 ⌘+Shift+5로 화면을 먼저 캡쳐하세요.');
+    }
+  } catch(e) {
+    const msg = (e && e.message) ? e.message : String(e);
+    if (msg.includes('NotAllowed') || msg.toLowerCase().includes('permission')) {
+      alert('브라우저에서 클립보드 접근 권한을 허용해주세요. 또는 빈 페이지 영역에서 Ctrl+V (⌘+V)를 사용하세요.');
+    } else {
+      alert('붙여넣기 실패: ' + msg);
+    }
+  }
+}
+
 // Amazon 링크 클립보드에서 붙여넣기 버튼
 async function pasteAmazonLinkFromClipboard() {
   try {
@@ -1232,7 +1266,8 @@ function renderAmazonPurchaseForm(d) {
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="ap_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'purchase_request')}</select></div>
         <div><label class="field-label">프로젝트 *</label><select class="field-input" id="ap_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
         <div><label class="field-label">수량</label><input class="field-input" type="number" min="1" step="1" id="ap_qty" value="${d.qty||1}" oninput="renderStructuredContent()"/></div>
-        <div><label class="field-label">금액 USD (총액) *</label><input class="field-input" type="number" step="0.01" id="ap_amount" value="${d.amount||''}" oninput="renderStructuredContent()" placeholder="0.00"/></div>
+        <div><label class="field-label">금액 USD (Tax 포함 최종 금액) *</label><input class="field-input" type="number" step="0.01" id="ap_amount" value="${d.amount||''}" oninput="renderStructuredContent()" placeholder="0.00"/></div>
+        <div style="grid-column:1/3;font-size:0.72rem;color:#fbbf24;background:rgba(251,191,36,0.08);border-left:3px solid #fbbf24;padding:8px 10px;border-radius:4px;">⚠️ <strong>금액은 반드시 Amazon 체크아웃의 Tax·Shipping 포함 최종 금액</strong>을 입력하세요.<br>장바구니에서 "Proceed to Checkout" 클릭 → Place Order 직전 페이지의 Total 금액 → 결재 입력 (주문은 결재 승인 후 진행)</div>
         <div style="grid-column:1/3;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
             <label class="field-label" style="margin-bottom:0;">사용 목적 / Purpose *</label>
