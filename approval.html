@@ -1104,6 +1104,8 @@ function showStructuredPanel(kind, data) {
   else if (kind === 'recurring') p.innerHTML = renderRecurringForm(data);
   else if (kind === 'purchase_request') p.innerHTML = renderAmazonPurchaseForm(data);
   else { hideStructuredPanel(); return; }
+  // payroll: 행 초기 렌더 (입력 중에는 절대 재호출 안 함 — IME 깨짐)
+  if (kind === 'payroll') renderPayrollPayeeRows();
   // 첫 렌더 후 미리보기 갱신
   renderStructuredContent();
 }
@@ -1261,7 +1263,7 @@ function renderStructuredContent() {
 [사용 목적]
 ${purpose || ''}`;
   } else if (kind === 'payroll') {
-    if (document.getElementById('pr_payeeList')) renderPayrollPayeeRows();
+    // 행 DOM 재생성은 추가/삭제 시에만 — 입력 중에 다시 그리면 한글 IME 조합이 깨짐
     const startDate = v('pr_startDate'), endDate = v('pr_endDate'), vendor = v('pr_vendor'),
           cat = v('pr_category'), proj = v('pr_project'),
           rate = parseFloat(v('pr_rate'))||0, rateDesc = v('pr_rateDesc');
