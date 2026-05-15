@@ -1159,7 +1159,7 @@ function renderCardExpenseForm(d) {
       <div style="font-size:0.9rem;color:var(--primary);font-weight:600;margin-bottom:0.8rem;">💳 카드 비용청구 / Card Expense (자산관리 자동 입력)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div><label class="field-label">사용일자 *</label><input class="field-input" type="date" id="se_date" value="${d.date||''}" oninput="renderStructuredContent()"/></div>
-        <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="number" step="0.01" id="se_amount" value="${d.amount||''}" oninput="renderStructuredContent()" placeholder="0.00"/></div>
+        <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="text" inputmode="decimal" id="se_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
         <div><label class="field-label">사용처 / Vendor *</label><input class="field-input" type="text" id="se_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="Amazon, Home Depot, Chevron 등"/></div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="se_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'card_expense')}</select></div>
         <div style="grid-column:1/3;"><label class="field-label">프로젝트 *</label><select class="field-input" id="se_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
@@ -1193,7 +1193,7 @@ function renderPayrollForm(d) {
           <div id="pr_payeeList"></div>
           <button type="button" class="btn btn-outline" style="margin-top:0.4rem;" onclick="addPayrollPayee()">+ 행 추가</button>
         </div>
-        <div><label class="field-label">환율 (KRW/USD) *</label><input class="field-input" type="number" step="0.01" id="pr_rate" value="${d.rate||''}" oninput="renderStructuredContent()" placeholder="1475.53"/></div>
+        <div><label class="field-label">환율 (KRW/USD) *</label><input class="field-input" type="text" inputmode="decimal" id="pr_rate" value="${d.rate?fmtNum(d.rate):''}" oninput="formatNumberInput(this,4);renderStructuredContent()" placeholder="1,475.53"/></div>
         <div><label class="field-label">환율 설명</label><input class="field-input" type="text" id="pr_rateDesc" value="${d.rateDesc||'3개월 평균 환율'}" oninput="renderStructuredContent()"/></div>
         <div><label class="field-label">총액 KRW (자동)</label><input class="field-input" type="text" id="pr_totalKRW" readonly style="background:rgba(255,255,255,0.03);"/></div>
         <div><label class="field-label">총액 USD (자동)</label><input class="field-input" type="text" id="pr_totalUSD" readonly style="background:rgba(255,255,255,0.03);"/></div>
@@ -1208,7 +1208,7 @@ function renderPayrollPayeeRows() {
   list.innerHTML = payrollPayees.map((p, i) => `
     <div style="display:grid;grid-template-columns:1fr 1fr 2fr auto;gap:0.4rem;margin-bottom:0.4rem;">
       <input class="field-input" placeholder="이름" value="${p.name||''}" oninput="payrollPayees[${i}].name=this.value;renderStructuredContent()"/>
-      <input class="field-input" type="number" step="1" placeholder="금액 KRW" value="${p.amount||''}" oninput="payrollPayees[${i}].amount=this.value;renderStructuredContent()"/>
+      <input class="field-input" type="text" inputmode="numeric" placeholder="금액 KRW" value="${p.amount?fmtKRW(p.amount):''}" oninput="formatNumberInput(this,0);payrollPayees[${i}].amount=parseFormattedNumber(this.value);renderStructuredContent()"/>
       <input class="field-input" placeholder="비고 (선택)" value="${p.note||''}" oninput="payrollPayees[${i}].note=this.value;renderStructuredContent()"/>
       ${payrollPayees.length>1?`<button type="button" class="btn-remove-approver" onclick="removePayrollPayee(${i})">✕</button>`:'<span></span>'}
     </div>
@@ -1225,7 +1225,7 @@ function renderRecurringForm(d) {
       <div style="font-size:0.9rem;color:var(--success);font-weight:600;margin-bottom:0.8rem;">📅 정기 지출 / Recurring Expense (자산관리 자동 입력)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div><label class="field-label">청구월 *</label><input class="field-input" type="month" id="re_billingMonth" value="${d.billingMonth||''}" oninput="renderStructuredContent()"/></div>
-        <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="number" step="0.01" id="re_amount" value="${d.amount||''}" oninput="renderStructuredContent()"/></div>
+        <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="text" inputmode="decimal" id="re_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
         <div><label class="field-label">업체 / Vendor *</label><input class="field-input" type="text" id="re_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="임대료/보험사/통신사 등"/></div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="re_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'recurring')}</select></div>
         <div style="grid-column:1/3;"><label class="field-label">프로젝트 *</label><select class="field-input" id="re_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
@@ -1266,7 +1266,7 @@ function renderAmazonPurchaseForm(d) {
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="ap_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'purchase_request')}</select></div>
         <div><label class="field-label">프로젝트 *</label><select class="field-input" id="ap_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
         <div><label class="field-label">수량</label><input class="field-input" type="number" min="1" step="1" id="ap_qty" value="${d.qty||1}" oninput="renderStructuredContent()"/></div>
-        <div><label class="field-label">금액 USD (Tax 포함 최종 금액) *</label><input class="field-input" type="number" step="0.01" id="ap_amount" value="${d.amount||''}" oninput="renderStructuredContent()" placeholder="0.00"/></div>
+        <div><label class="field-label">금액 USD (Tax 포함 최종 금액) *</label><input class="field-input" type="text" inputmode="decimal" id="ap_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
         <div style="grid-column:1/3;font-size:0.72rem;color:#fbbf24;background:rgba(251,191,36,0.08);border-left:3px solid #fbbf24;padding:8px 10px;border-radius:4px;">⚠️ <strong>금액은 반드시 Amazon 체크아웃의 Tax·Shipping 포함 최종 금액</strong>을 입력하세요.<br>장바구니에서 "Proceed to Checkout" 클릭 → Place Order 직전 페이지의 Total 금액 → 결재 입력 (주문은 결재 승인 후 진행)</div>
         <div style="grid-column:1/3;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
@@ -1301,13 +1301,13 @@ ${purpose || ''}`;
     // 행 DOM 재생성은 추가/삭제 시에만 — 입력 중에 다시 그리면 한글 IME 조합이 깨짐
     const startDate = v('pr_startDate'), endDate = v('pr_endDate'), vendor = v('pr_vendor'),
           cat = v('pr_category'), proj = v('pr_project'),
-          rate = parseFloat(v('pr_rate'))||0, rateDesc = v('pr_rateDesc');
-    const totalKRW = payrollPayees.reduce((s,p)=>s+(parseFloat(p.amount)||0),0);
+          rate = parseFormattedNumber(v('pr_rate')), rateDesc = v('pr_rateDesc');
+    const totalKRW = payrollPayees.reduce((s,p)=>s+(parseFormattedNumber(p.amount)),0);
     const totalUSD = rate>0 ? totalKRW/rate : 0;
     if (document.getElementById('pr_totalKRW')) document.getElementById('pr_totalKRW').value = totalKRW>0?fmtKRW(totalKRW)+' 원':'';
     if (document.getElementById('pr_totalUSD')) document.getElementById('pr_totalUSD').value = totalUSD>0?'$ '+fmtNum(totalUSD):'';
     const payeeLines = payrollPayees.filter(p=>p.name).map(p=>{
-      const amt = fmtKRW(parseFloat(p.amount)||0);
+      const amt = fmtKRW(parseFormattedNumber(p.amount));
       const note = p.note ? ` (${p.note})` : '';
       return `   - ${p.name}: ${amt}원${note}`;
     }).join('\n');
@@ -1357,8 +1357,30 @@ ${purpose || ''}
 }
 
 function v(id) { const el = document.getElementById(id); return el ? el.value : ''; }
-function fmtNum(n) { const x = parseFloat(n); return isNaN(x)?'0.00':x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function fmtKRW(n) { const x = parseFloat(n); return isNaN(x)?'0':Math.round(x).toLocaleString('en-US'); }
+function fmtNum(n) { const x = parseFloat(String(n).replace(/,/g,'')); return isNaN(x)?'0.00':x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtKRW(n) { const x = parseFloat(String(n).replace(/,/g,'')); return isNaN(x)?'0':Math.round(x).toLocaleString('en-US'); }
+
+// ── 숫자 입력 천단위 자동 포매팅 ──
+function parseFormattedNumber(s) { return parseFloat(String(s||'').replace(/,/g,'')) || 0; }
+function formatNumberInput(el, decimals) {
+  const before = el.value;
+  const cursorPos = el.selectionStart || before.length;
+  let val = before.replace(/[^\d.]/g, '');
+  const parts = val.split('.');
+  if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+  let [intPart, decPart] = val.split('.');
+  intPart = (intPart || '').replace(/^0+(?=\d)/, '') || (intPart===''?'':'0');
+  if (decimals !== undefined && decPart !== undefined && decPart.length > decimals) decPart = decPart.slice(0, decimals);
+  if (decimals === 0) decPart = undefined;
+  const intFmt = intPart ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+  const formatted = intFmt + (decPart !== undefined ? '.' + decPart : (before.endsWith('.') && decimals !== 0 ? '.' : ''));
+  if (formatted === before) return;
+  el.value = formatted;
+  const commasBefore = (before.slice(0, cursorPos).match(/,/g) || []).length;
+  const commasAfter = (formatted.slice(0, cursorPos).match(/,/g) || []).length;
+  const diff = commasAfter - commasBefore;
+  try { el.setSelectionRange(cursorPos + diff, cursorPos + diff); } catch(e) {}
+}
 
 // ── 구조화 데이터 수집 (Firestore 저장용) ──
 function collectStructuredData() {
@@ -1366,26 +1388,26 @@ function collectStructuredData() {
   if (!kind) return null;
   if (kind === 'card_expense') {
     return { kind, date:v('se_date'), vendor:v('se_vendor'), category:v('se_category'),
-             project:v('se_project'), amount:parseFloat(v('se_amount'))||0, purpose:v('se_purpose') };
+             project:v('se_project'), amount:parseFormattedNumber(v('se_amount')), purpose:v('se_purpose') };
   }
   if (kind === 'payroll') {
-    const rate = parseFloat(v('pr_rate'))||0;
-    const totalKRW = payrollPayees.reduce((s,p)=>s+(parseFloat(p.amount)||0),0);
+    const rate = parseFormattedNumber(v('pr_rate'));
+    const totalKRW = payrollPayees.reduce((s,p)=>s+(parseFormattedNumber(p.amount)),0);
     const totalUSD = rate>0 ? totalKRW/rate : 0;
     return { kind, startDate:v('pr_startDate'), endDate:v('pr_endDate'), vendor:v('pr_vendor'),
              category:v('pr_category'), project:v('pr_project'),
-             payees:payrollPayees.filter(p=>p.name||p.amount),
+             payees:payrollPayees.filter(p=>p.name||p.amount).map(p=>({name:p.name,amount:parseFormattedNumber(p.amount),note:p.note})),
              rate, rateDesc:v('pr_rateDesc'), totalKRW, totalUSD };
   }
   if (kind === 'recurring') {
     return { kind, billingMonth:v('re_billingMonth'), vendor:v('re_vendor'), category:v('re_category'),
-             project:v('re_project'), amount:parseFloat(v('re_amount'))||0, note:v('re_note') };
+             project:v('re_project'), amount:parseFormattedNumber(v('re_amount')), note:v('re_note') };
   }
   if (kind === 'purchase_request') {
     const title = (document.getElementById('docTitle')?.value || '').trim();
     return { kind, item:title, link:v('ap_link'), category:v('ap_category'),
              project:v('ap_project'), qty:parseInt(v('ap_qty'))||1,
-             amount:parseFloat(v('ap_amount'))||0, purpose:v('ap_purpose') };
+             amount:parseFormattedNumber(v('ap_amount')), purpose:v('ap_purpose') };
   }
   return null;
 }
