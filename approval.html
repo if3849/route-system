@@ -2521,7 +2521,11 @@ async function syncDocToAssetManager(doc) {
     payload.amount = sd.amount;
     payload.note = doc.content || '';
   } else if (kind === 'payroll') {
-    payload.date = sd.endDate;
+    // 산정기간 종료일이 아닌 승인일을 거래일로 사용 (실제 지급일)
+    const approvedAt = (doc.history || []).slice().reverse().find(h => h.action === 'approved');
+    const ts = approvedAt ? approvedAt.at : Date.now();
+    const d = new Date(ts);
+    payload.date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     payload.vendor = sd.vendor;
     payload.category = sd.category;
     payload.project = sd.project;
