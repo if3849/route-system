@@ -2024,6 +2024,7 @@ function applyApprovalTemplate(t) {
 
   // 본인은 자기 결재자가 될 수 없으므로 제외
   const skippedNames = [];
+  const autoAddedNames = [];
   const filteredApprovers = (t.approvers || []).filter(id => {
     if (id === currentUser.id) {
       const u = users.find(x => x.id === id);
@@ -2040,6 +2041,21 @@ function applyApprovalTemplate(t) {
     }
     return true;
   });
+
+  // ★ 정형 결재(template_kind 있음)는 자기자신 외 최소 2명 결재 필수
+  //    본인 제외로 결재자가 1명 이하가 되면 다른 admin 자동 추가 (단독 결재 방지)
+  if (t.template_kind && filteredApprovers.length < 2) {
+    const need = 2 - filteredApprovers.length;
+    const fallbacks = users.filter(u =>
+      u.role === 'Admin' &&
+      u.id !== currentUser.id &&
+      !filteredApprovers.includes(u.id)
+    ).slice(0, need);
+    fallbacks.forEach(u => {
+      filteredApprovers.push(u.id);
+      autoAddedNames.push(u.name);
+    });
+  }
 
   // 결재라인 채우기 (템플릿에 결재자가 있을 때만 — 비어있으면 기존 결재라인 유지)
   if (filteredApprovers.length > 0) {
@@ -2075,8 +2091,16 @@ function applyApprovalTemplate(t) {
     });
   }
 
-  if (skippedNames.length > 0) {
-    setTimeout(() => alert('본인은 자신의 결재자/참조자가 될 수 없어 다음 항목이 자동으로 제외되었습니다:\n\n• ' + skippedNames.join('\n• ')), 100);
+  if (skippedNames.length > 0 || autoAddedNames.length > 0) {
+    let msg = '';
+    if (skippedNames.length > 0) {
+      msg += '본인은 자신의 결재자/참조자가 될 수 없어 다음 항목이 자동으로 제외되었습니다:\n• ' + skippedNames.join('\n• ');
+    }
+    if (autoAddedNames.length > 0) {
+      if (msg) msg += '\n\n';
+      msg += '⚠️ 단독 결재 방지를 위해 다음 결재자가 자동 추가되었습니다 (수정 가능):\n• ' + autoAddedNames.join('\n• ');
+    }
+    setTimeout(() => alert(msg), 100);
   }
 }
 
@@ -2284,6 +2308,11 @@ async function submitDoc(status) {
     if (new Set(selApprovers).size !== selApprovers.length) { alert('Duplicate approvers found.'); return; }
     const overlap = selCc.filter(c => selApprovers.includes(c));
     if (overlap.length) { alert('결재자와 참조자에 동일인이 있습니다.'); return; }
+    // ★ 정형 결재(비용 결재)는 자기자신 외 최소 2명 결재자 필수 (단독 결재 방지)
+    if (structuredData && structuredData.kind && selApprovers.length < 2) {
+      alert('비용 결재(' + (currentStructuredKind || '') + ')는 단독 결재 방지를 위해 본인 외 최소 2명의 결재자가 필요합니다.\n결재라인을 추가해주세요.');
+      return;
+    }
   } else {
     if (!title) { alert('Please enter a title.'); return; }
   }
