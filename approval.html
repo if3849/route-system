@@ -1135,7 +1135,8 @@ function categoryOptions(selected, kind) {
 
 const PAYMENT_METHODS = ['아마존카드','법인카드','법인통장'];
 function paymentMethodOptions(selected) {
-  return PAYMENT_METHODS.map(m => `<option value="${m}"${m===selected?' selected':''}>${m}</option>`).join('');
+  const placeholder = `<option value=""${!selected?' selected':''}>— 선택 / Select —</option>`;
+  return placeholder + PAYMENT_METHODS.map(m => `<option value="${m}"${m===selected?' selected':''}>${m}</option>`).join('');
 }
 
 function showStructuredPanel(kind, data) {
@@ -1173,7 +1174,7 @@ function renderCardExpenseForm(d) {
         <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="text" inputmode="decimal" id="se_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
         <div><label class="field-label">사용처 / Vendor *</label><input class="field-input" type="text" id="se_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="Amazon, Home Depot, Chevron 등"/></div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="se_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'card_expense')}</select></div>
-        <div><label class="field-label">결제수단 *</label><select class="field-input" id="se_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'법인카드')}</select></div>
+        <div><label class="field-label">결제수단 *</label><select class="field-input" id="se_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'')}</select></div>
         <div style="grid-column:1/3;"><label class="field-label">프로젝트 *</label><select class="field-input" id="se_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
         <div style="grid-column:1/3;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
@@ -1212,7 +1213,7 @@ function renderPayrollForm(d) {
         <div><label class="field-label">산정기간 종료 *</label><input class="field-input" type="date" id="pr_endDate" value="${d.endDate||''}" oninput="renderStructuredContent()"/></div>
         <div><label class="field-label">업체명 / Vendor *</label><input class="field-input" type="text" id="pr_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="티아이테크 등"/></div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="pr_category" onchange="renderStructuredContent()">${categoryOptions(d.category||'재료비','payroll')}</select></div>
-        <div><label class="field-label">결제수단 *</label><select class="field-input" id="pr_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'법인통장')}</select></div>
+        <div><label class="field-label">결제수단 *</label><select class="field-input" id="pr_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'')}</select></div>
         <div style="grid-column:1/3;"><label class="field-label">프로젝트 *</label><select class="field-input" id="pr_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
         <div style="grid-column:1/3;margin-top:0.5rem;">
           <label class="field-label">지급명세 (<span id="pr_currencyLabel">${currency}</span>) *</label>
@@ -1287,7 +1288,7 @@ function renderRecurringForm(d) {
         <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="text" inputmode="decimal" id="re_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
         <div><label class="field-label">업체 / Vendor *</label><input class="field-input" type="text" id="re_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="임대료/보험사/통신사 등"/></div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="re_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'recurring')}</select></div>
-        <div><label class="field-label">결제수단 *</label><select class="field-input" id="re_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'법인통장')}</select></div>
+        <div><label class="field-label">결제수단 *</label><select class="field-input" id="re_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'')}</select></div>
         <div style="grid-column:1/3;"><label class="field-label">프로젝트 *</label><select class="field-input" id="re_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
         <div style="grid-column:1/3;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
@@ -1327,7 +1328,7 @@ function renderAmazonPurchaseForm(d) {
         <div><label class="field-label">프로젝트 *</label><select class="field-input" id="ap_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
         <div><label class="field-label">수량</label><input class="field-input" type="number" min="1" step="1" id="ap_qty" value="${d.qty||1}" oninput="renderStructuredContent()"/></div>
         <div><label class="field-label">금액 USD (Tax 포함 최종 금액) *</label><input class="field-input" type="text" inputmode="decimal" id="ap_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
-        <div style="grid-column:1/3;"><label class="field-label">결제수단 *</label><select class="field-input" id="ap_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'아마존카드')}</select></div>
+        <div style="grid-column:1/3;"><label class="field-label">결제수단 *</label><select class="field-input" id="ap_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'')}</select></div>
         <div style="grid-column:1/3;font-size:0.72rem;color:#fbbf24;background:rgba(251,191,36,0.08);border-left:3px solid #fbbf24;padding:8px 10px;border-radius:4px;">⚠️ <strong>금액은 반드시 Amazon 체크아웃의 Tax·Shipping 포함 최종 금액</strong>을 입력하세요.<br>장바구니에서 "Proceed to Checkout" 클릭 → Place Order 직전 페이지의 Total 금액 → 결재 입력 (주문은 결재 승인 후 진행)</div>
         <div style="grid-column:1/3;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
@@ -1472,14 +1473,14 @@ function collectStructuredData() {
   if (kind === 'card_expense') {
     return { kind, date:v('se_date'), vendor:v('se_vendor'), category:v('se_category'),
              project:v('se_project'), amount:parseFormattedNumber(v('se_amount')), purpose:v('se_purpose'),
-             paymentMethod:v('se_paymentMethod')||'법인카드' };
+             paymentMethod:v('se_paymentMethod') };
   }
   if (kind === 'payroll') {
     const currency = (document.querySelector('input[name="pr_currency"]:checked')?.value) || 'KRW';
     const cleanedPayees = payrollPayees.filter(p=>p.name||p.amount).map(p=>({name:p.name,amount:parseFormattedNumber(p.amount),note:p.note}));
     const base = { kind, currency, startDate:v('pr_startDate'), endDate:v('pr_endDate'), vendor:v('pr_vendor'),
                    category:v('pr_category'), project:v('pr_project'), payees:cleanedPayees,
-                   paymentMethod:v('pr_paymentMethod')||'법인통장' };
+                   paymentMethod:v('pr_paymentMethod') };
     if (currency === 'KRW') {
       const rate = parseFormattedNumber(v('pr_rate'));
       const totalKRW = cleanedPayees.reduce((s,p)=>s+(p.amount||0),0);
@@ -1494,14 +1495,14 @@ function collectStructuredData() {
   if (kind === 'recurring') {
     return { kind, billingMonth:v('re_billingMonth'), vendor:v('re_vendor'), category:v('re_category'),
              project:v('re_project'), amount:parseFormattedNumber(v('re_amount')), note:v('re_note'),
-             paymentMethod:v('re_paymentMethod')||'법인통장' };
+             paymentMethod:v('re_paymentMethod') };
   }
   if (kind === 'purchase_request') {
     const title = (document.getElementById('docTitle')?.value || '').trim();
     return { kind, item:title, link:v('ap_link'), category:v('ap_category'),
              project:v('ap_project'), qty:parseInt(v('ap_qty'))||1,
              amount:parseFormattedNumber(v('ap_amount')), purpose:v('ap_purpose'),
-             paymentMethod:v('ap_paymentMethod')||'아마존카드' };
+             paymentMethod:v('ap_paymentMethod') };
   }
   return null;
 }
@@ -1519,6 +1520,8 @@ function validateStructured() {
   } else if (d.kind === 'purchase_request') {
     if (!d.item || !d.category || !d.project || !d.amount || !d.purpose) return '필수 항목(Title=품목명 / 카테고리 / 프로젝트 / 금액 / 사용목적)을 입력하세요.';
   }
+  // 결제수단 필수 — 모든 정형 양식 공통
+  if (!d.paymentMethod || d.paymentMethod === '미분류') return '결제수단(Payment Method)을 선택해 주세요.';
   return null;
 }
 function backToHub() {
