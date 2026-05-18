@@ -2295,13 +2295,15 @@ async function submitDoc(status) {
   const contentFinal = document.getElementById('docContent').value.trim();
 
   if (status === 'pending') {
-    if (!type || !title || !contentFinal) { alert('Please fill in all required fields.'); return; }
-    if (!selApprovers.length) { alert('Please add at least one approver.'); return; }
-    if (new Set(selApprovers).size !== selApprovers.length) { alert('Duplicate approvers found.'); return; }
+    if (!type)         { alert('문서 종류(Document Type)를 선택해 주세요.\nPlease select a Document Type.'); return; }
+    if (!title)        { alert('제목(Title)을 입력해 주세요.\nPlease enter a title.'); return; }
+    if (!contentFinal) { alert('본문(Content)을 입력해 주세요.\nPlease enter content.'); return; }
+    if (!selApprovers.length) { alert('결재자를 1명 이상 선택해 주세요.\nPlease add at least one approver.'); return; }
+    if (new Set(selApprovers).size !== selApprovers.length) { alert('동일한 결재자가 중복 선택되었습니다.\nDuplicate approvers found.'); return; }
     const overlap = selCc.filter(c => selApprovers.includes(c));
-    if (overlap.length) { alert('결재자와 참조자에 동일인이 있습니다.'); return; }
+    if (overlap.length) { alert('결재자와 참조자에 동일인이 있습니다.\nSame person in both approvers and CC.'); return; }
   } else {
-    if (!title) { alert('Please enter a title.'); return; }
+    if (!title) { alert('제목(Title)을 입력해 주세요.\nPlease enter a title.'); return; }
   }
 
   // ── ★ 편집 모드: 기존 문서 업데이트 (draft / rejected) ──
