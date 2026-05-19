@@ -2260,13 +2260,21 @@ function deleteTemplate(id) {
 // ── 원자적 문서 번호 발급 (Firestore 트랜잭션) — 동시 제출 race condition 방지 ──
 async function reserveNextDocNo() {
   const ref = db.collection('meta').doc('counter');
-  return await db.runTransaction(async tx => {
-    const snap = await tx.get(ref);
-    const cur = (snap.exists && snap.data().value) || 0;
-    const next = cur + 1;
-    tx.set(ref, { value: next });
-    return next;
-  });
+  // 채번 후 동일 docNo가 documents에 이미 있으면 counter를 bump하고 재시도 (방어)
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const next = await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const cur = (snap.exists && snap.data().value) || 0;
+      const n = cur + 1;
+      tx.set(ref, { value: n });
+      return n;
+    });
+    const docNo = 'RSI-' + String(next).padStart(4, '0');
+    const dup = await db.collection('documents').where('docNo', '==', docNo).limit(1).get();
+    if (dup.empty) return next;
+    console.warn('[reserveNextDocNo] collision on', docNo, '— bumping counter and retrying');
+  }
+  throw new Error('docNo 발급 충돌 20회 — counter/documents 불일치 확인 필요');
 }
 
 async function submitDoc(status) {
@@ -2592,7 +2600,8 @@ async function syncDocToAssetManager(doc) {
       return { ok:true, tx_id: j.asset_response.tx_id };
     }
     if (j.asset_response && j.asset_response.error === 'already_synced') {
-      return { ok:true, tx_id: j.asset_response.tx_id };  // 중복은 성공 처리
+      // 동일 docNo로 이미 다른 거래가 등록된 경우 — 채번 중복 가능성. 실패로 표시해서 인지 가능하게.
+      return { ok:false, error:'duplicate_doc_no (same docNo already synced as tx ' + (j.asset_response.tx_id||'?') + ')' };
     }
     return { ok:false, error: (j.asset_response && j.asset_response.error) || j.error || 'HTTP '+r.status };
   } catch(e) {
