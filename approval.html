@@ -740,6 +740,26 @@ const firebaseConfig = {
 
 window.addEventListener('load', function() {
   try {
+    // ── Vendor Invoice prefill from asset manager ──
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('from') === 'invoice' && urlParams.get('viId')) {
+        window.viPrefill = {
+          viId: urlParams.get('viId'),
+          vendor: urlParams.get('vendor') || '',
+          invoiceNo: urlParams.get('invoiceNo') || '',
+          amount: urlParams.get('amount') || '',
+          invoiceDate: urlParams.get('invoiceDate') || '',
+          dueDate: urlParams.get('dueDate') || '',
+          category: urlParams.get('category') || '',
+          project: urlParams.get('project') || '',
+          paymentMethod: urlParams.get('paymentMethod') || '',
+          note: urlParams.get('note') || ''
+        };
+        console.log('[viPrefill] loaded:', window.viPrefill);
+      }
+    } catch(e) { console.error('[viPrefill] parse error', e); }
+
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
 
@@ -1087,6 +1107,47 @@ function enterApproval() {
   history.pushState({screen:'approval'}, '', '');
   refreshAll(); showPage('dashboard');
   fetchAssetMeta();
+
+  // ── Vendor invoice prefill: auto-open new doc form with card_expense ──
+  if (window.viPrefill && window.viPrefill.viId) {
+    setTimeout(() => {
+      try {
+        showPage('new');
+        // Wait for asset meta to load (projects/categories)
+        const tryApply = (retries=10) => {
+          if (assetProjects.length === 0 && retries > 0) {
+            return setTimeout(() => tryApply(retries-1), 300);
+          }
+          // Prefill title
+          const titleEl = document.getElementById('docTitle');
+          if (titleEl && !titleEl.value) {
+            titleEl.value = `[벤더 인보이스] ${window.viPrefill.vendor} - ${window.viPrefill.invoiceNo}`;
+          }
+          // Open card_expense structured form with prefilled data
+          showStructuredPanel('card_expense', {
+            date: window.viPrefill.invoiceDate || new Date().toISOString().slice(0,10),
+            amount: window.viPrefill.amount,
+            vendor: window.viPrefill.vendor,
+            category: window.viPrefill.category,
+            project: window.viPrefill.project,
+            paymentMethod: window.viPrefill.paymentMethod,
+            purpose: `인보이스 #${window.viPrefill.invoiceNo}` + (window.viPrefill.dueDate?` (지급기한: ${window.viPrefill.dueDate})`:'') + (window.viPrefill.note?`\n${window.viPrefill.note}`:'')
+          });
+          renderStructuredContent();
+          // Show a banner
+          const banner = document.createElement('div');
+          banner.style.cssText = 'background:rgba(245,158,11,0.15);border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:1rem;font-size:0.9rem;color:#fbbf24;';
+          banner.innerHTML = `🧾 자산관리 벤더 인보이스에서 자동 채워졌습니다. 검토 후 결재자/참조자만 선택하고 제출하세요.`;
+          const form = document.querySelector('#page-new');
+          if (form && !document.getElementById('viPrefillBanner')) {
+            banner.id = 'viPrefillBanner';
+            form.insertBefore(banner, form.firstChild);
+          }
+        };
+        tryApply();
+      } catch(e) { console.error('[viPrefill] apply error', e); }
+    }, 500);
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2389,7 +2450,26 @@ async function submitDoc(status) {
     attachments: [...uploadedFiles],
     structuredData: structuredData || null
   };
-  saveDoc(docData).then(() => {
+  // If from vendor invoice prefill, embed viId in structuredData
+  if (window.viPrefill && window.viPrefill.viId && docData.structuredData) {
+    docData.structuredData.viId = window.viPrefill.viId;
+  }
+  saveDoc(docData).then(async () => {
+    // Link back to asset manager vendor_invoice (if applicable)
+    if (window.viPrefill && window.viPrefill.viId) {
+      try {
+        const r = await fetch(ASSET_API_BASE + '/link-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vi_id: window.viPrefill.viId, source_doc_no: docData.docNo })
+        });
+        if (r.ok) console.log('[viPrefill] linked to invoice', window.viPrefill.viId, '->', docData.docNo);
+        else console.warn('[viPrefill] link failed', r.status);
+      } catch(e) { console.error('[viPrefill] link error', e); }
+      window.viPrefill = null;
+      const banner = document.getElementById('viPrefillBanner');
+      if (banner) banner.remove();
+    }
     ['docType','docTitle','docContent'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('docPriority').value = 'Normal';
     hideStructuredPanel();
