@@ -1154,6 +1154,19 @@ function enterApproval() {
             banner.id = 'viPrefillBanner';
             form.insertBefore(banner, form.firstChild);
           }
+          // ── File attachment info: tell user not to re-upload files ──
+          if (!document.getElementById('viPrefillFileNote')) {
+            const fileLabels = document.querySelectorAll('#page-new label');
+            let fileLabel = null;
+            fileLabels.forEach(el => { if (el.textContent && el.textContent.indexOf('파일 첨부') >= 0) fileLabel = el; });
+            if (fileLabel) {
+              const note = document.createElement('div');
+              note.id = 'viPrefillFileNote';
+              note.style.cssText = 'background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.4);border-radius:8px;padding:10px 14px;margin:0.5rem 0 0.8rem 0;font-size:0.85rem;color:#93c5fd;';
+              note.innerHTML = `📎 <strong>자산관리에 첨부된 벤더 인보이스/세부내역서가 자동으로 연결됩니다.</strong><br>승인 후 거래내역에 자동 복사되므로, <strong>여기서는 추가 파일이 있을 때만</strong> 업로드하세요.`;
+              fileLabel.parentNode.insertBefore(note, fileLabel.nextSibling);
+            }
+          }
         };
         tryApply();
       } catch(e) { console.error('[viPrefill] apply error', e); }
