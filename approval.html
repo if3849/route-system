@@ -1108,22 +1108,33 @@ function enterApproval() {
   refreshAll(); showPage('dashboard');
   fetchAssetMeta();
 
-  // ── Vendor invoice prefill: auto-open new doc form with card_expense ──
+  // ── Vendor invoice prefill: auto-open new doc form with card_expense template ──
   if (window.viPrefill && window.viPrefill.viId) {
     setTimeout(() => {
       try {
         showPage('new');
-        // Wait for asset meta to load (projects/categories)
-        const tryApply = (retries=10) => {
-          if (assetProjects.length === 0 && retries > 0) {
+        const tryApply = (retries=15) => {
+          // Wait until templates AND asset meta loaded
+          if ((assetProjects.length === 0 || templates.length === 0) && retries > 0) {
             return setTimeout(() => tryApply(retries-1), 300);
+          }
+          // Find the card_expense template
+          const tmpl = templates.find(t => t.template_kind === 'card_expense' && !t.archived);
+          if (tmpl) {
+            // Set docType dropdown
+            const docTypeEl = document.getElementById('docType');
+            if (docTypeEl) {
+              docTypeEl.value = tmpl.id;
+              // Trigger applyApprovalTemplate (sets approvers/etc and shows structured panel with empty data)
+              try { applyApprovalTemplate(tmpl); } catch(e) { console.warn('apply template err', e); }
+            }
           }
           // Prefill title
           const titleEl = document.getElementById('docTitle');
           if (titleEl && !titleEl.value) {
             titleEl.value = `[벤더 인보이스] ${window.viPrefill.vendor} - ${window.viPrefill.invoiceNo}`;
           }
-          // Open card_expense structured form with prefilled data
+          // Re-apply showStructuredPanel with prefill data (overlays empty data from template)
           showStructuredPanel('card_expense', {
             date: window.viPrefill.invoiceDate || new Date().toISOString().slice(0,10),
             amount: window.viPrefill.amount,
@@ -1137,7 +1148,7 @@ function enterApproval() {
           // Show a banner
           const banner = document.createElement('div');
           banner.style.cssText = 'background:rgba(245,158,11,0.15);border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:1rem;font-size:0.9rem;color:#fbbf24;';
-          banner.innerHTML = `🧾 자산관리 벤더 인보이스에서 자동 채워졌습니다. 검토 후 결재자/참조자만 선택하고 제출하세요.`;
+          banner.innerHTML = `🧾 자산관리 벤더 인보이스에서 자동 채워졌습니다. 검토 후 결재자만 확인하고 제출하세요.`;
           const form = document.querySelector('#page-new');
           if (form && !document.getElementById('viPrefillBanner')) {
             banner.id = 'viPrefillBanner';
@@ -1146,7 +1157,7 @@ function enterApproval() {
         };
         tryApply();
       } catch(e) { console.error('[viPrefill] apply error', e); }
-    }, 500);
+    }, 800);
   }
 }
 
@@ -1187,7 +1198,9 @@ const CATEGORY_WHITELIST = {
 };
 
 function categoryOptions(selected, kind) {
-  const whitelist = (kind && CATEGORY_WHITELIST[kind]) ? CATEGORY_WHITELIST[kind] : null;
+  // When prefilling from vendor invoice, show ALL categories (bypass whitelist)
+  const bypassWhitelist = !!(window.viPrefill && window.viPrefill.viId);
+  const whitelist = bypassWhitelist ? null : ((kind && CATEGORY_WHITELIST[kind]) ? CATEGORY_WHITELIST[kind] : null);
   let list = assetCategories;
   if (whitelist && whitelist.length) {
     list = whitelist.filter(c => assetCategories.includes(c));
@@ -1227,11 +1240,11 @@ function hideStructuredPanel() {
   document.getElementById('docContentWrapper').style.display = '';
 }
 
-// ── 카드 비용청구 ──
+// ── 비용청구 / Expense ──
 function renderCardExpenseForm(d) {
   return `
     <div style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:14px;margin-bottom:1rem;">
-      <div style="font-size:0.9rem;color:var(--primary);font-weight:600;margin-bottom:0.8rem;">💳 카드 비용청구 / Card Expense (자산관리 자동 입력)</div>
+      <div style="font-size:0.9rem;color:var(--primary);font-weight:600;margin-bottom:0.8rem;">💸 비용청구 / Expense (자산관리 자동 입력)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div><label class="field-label">사용일자 *</label><input class="field-input" type="date" id="se_date" value="${d.date||''}" oninput="renderStructuredContent()"/></div>
         <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="text" inputmode="decimal" id="se_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
