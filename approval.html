@@ -763,6 +763,27 @@ window.addEventListener('load', function() {
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
 
+    // ── 앱 세션 만료 시 무중단 재-SSO ──
+    // 각 앱이 세션 만료되면 ?reauth=<app> 으로 허브에 들어옴.
+    // Firebase 세션이 살아있으면(또는 로그인하면) 새 토큰을 발급해 앱 /sso로 자동 이동.
+    try {
+      const _ra = new URLSearchParams(window.location.search).get('reauth');
+      const _RA_TARGETS = {
+        asset:       'http://routesystem.synology.me:8080/sso',
+        quotation:   'http://routesystem.synology.me:8082/sso',
+        fieldreport: 'http://98.167.239.190:3000/sso'
+      };
+      if (_ra && _RA_TARGETS[_ra]) {
+        firebase.auth().onAuthStateChanged(async function(_u){
+          if (!_u) return;  // 미로그인 → 허브 로그인 화면 그대로, 로그인하면 다시 발동
+          try {
+            const _t = await _u.getIdToken(true);
+            window.location.replace(_RA_TARGETS[_ra] + '?token=' + encodeURIComponent(_t));
+          } catch(_e) { console.error('[reauth] token error', _e); }
+        });
+      }
+    } catch(_e) { console.error('[reauth] init error', _e); }
+
     db.collection('meta').doc('counter').get().then(d => {
       if (d.exists) docCounter = d.data().value || 0;
     });
