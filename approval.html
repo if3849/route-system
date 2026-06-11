@@ -1199,8 +1199,15 @@ function enterApproval() {
 //  STRUCTURED FORM — 비용 결재용 정형 양식 (자산관리 자동 연동)
 // ══════════════════════════════════════════════════════════
 const ASSET_API_BASE = 'https://routesystem-nas.tail66c283.ts.net';
-let assetProjects = [];
-let assetCategories = [];
+// 직원 PC(Tailscale 미설치 등으로 ts.net 백엔드 미도달) 대비 fallback.
+//   fetch 실패해도 카테고리/프로젝트 dropdown이 비지 않도록 초기값으로 사용하고,
+//   fetch 성공 시 라이브 값으로 덮어씀. 자산관리에서 목록 변경 시 여기도 갱신 권장.
+const ASSET_META_FALLBACK = {
+  projects: ["Route System (공통/운영비)","P-1 OSA AZ C/V","P-2 LGPRI AZ","P-3 QA Project AZ","영업외 수익"],
+  categories: ["경상개발비","교육훈련비","급여(직원)","급여(프리)","매출(공사대금)","매출(보통예금)","매출(이자수익)","매출(회수금)","무형자산","보험료","복리후생비(식비)","복리후생비(접대)","비품(자산)","세금과공과","소모품비","수도광열비(공과금)","여비교통비","운반비","원재료","지급수수료","지급이자","지급임차료","차량유지비","통신비"]
+};
+let assetProjects = ASSET_META_FALLBACK.projects.slice();
+let assetCategories = ASSET_META_FALLBACK.categories.slice();
 let currentStructuredKind = null;   // 'card_expense' | 'payroll' | 'recurring' | null
 let payrollPayees = [];              // 외주비/급여 지급명세 행 배열
 
@@ -1210,10 +1217,11 @@ async function fetchAssetMeta() {
       fetch(ASSET_API_BASE + '/asset-projects').then(r => r.json()),
       fetch(ASSET_API_BASE + '/asset-categories').then(r => r.json())
     ]);
-    if (Array.isArray(pr)) assetProjects = pr;
-    if (Array.isArray(cr)) assetCategories = cr;
+    // 라이브 값이 있을 때만 덮어씀 (빈 응답/실패 시 fallback 유지)
+    if (Array.isArray(pr) && pr.length) assetProjects = pr;
+    if (Array.isArray(cr) && cr.length) assetCategories = cr;
   } catch(e) {
-    console.warn('Asset meta fetch failed:', e);
+    console.warn('Asset meta fetch failed, using fallback:', e);
   }
 }
 
