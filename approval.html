@@ -570,6 +570,17 @@
           <button class="btn btn-gold" onclick="openTemplateModal()">+ 새 템플릿 / New Template</button>
         </div>
       </div>
+
+      <div class="settings-card">
+        <div class="settings-head">🏷️ 문서종류별 카테고리 / Document Categories</div>
+        <div class="info-box">
+          정형 양식(법인카드 지출·외주비/급여·정기지출·구매요청)에서 선택할 수 있는 <strong>카테고리 목록</strong>을 문서종류별로 직접 관리합니다.<br>
+          여기서 체크/해제하고 저장하면 코드 수정·배포 없이 전 직원에게 즉시 반영됩니다.
+        </div>
+        <div style="margin-top:1.2rem;">
+          <button class="btn btn-gold" onclick="openCategoryConfigModal()">⚙️ 카테고리 설정 관리</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -678,6 +689,30 @@
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('templateModal')">Cancel</button>
       <button class="btn btn-gold" onclick="saveTemplate()">Save Template →</button>
+    </div>
+  </div>
+</div>
+
+<!-- CATEGORY CONFIG MODAL -->
+<div class="modal-overlay" id="categoryConfigModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🏷️ 문서종류별 카테고리 설정</div>
+      <button class="modal-close" onclick="closeModal('categoryConfigModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <label class="field-label">문서종류 / Document Type</label>
+        <select class="field-input" id="ccKind" onchange="renderCategoryConfigList()"></select>
+      </div>
+      <div style="font-size:0.78rem;color:var(--mid);margin:0.4rem 0 0.8rem;">
+        이 문서종류에서 선택 가능한 카테고리를 체크하세요. 자산관리에 등록된 전체 카테고리 목록입니다.
+      </div>
+      <div id="ccCategoryList" style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1rem;max-height:48vh;overflow-y:auto;padding:0.2rem;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('categoryConfigModal')">Cancel</button>
+      <button class="btn btn-gold" onclick="saveCategoryConfig()">저장 / Save</button>
     </div>
   </div>
 </div>
@@ -856,6 +891,18 @@ window.addEventListener('load', function() {
       }
     }, err => {
       console.error('Firebase templates sync error:', err);
+    });
+
+    // 문서종류별 카테고리 화이트리스트 (Admin이 화면에서 편집) — 실시간 구독
+    db.collection('meta').doc('category_whitelist').onSnapshot(d => {
+      if (d.exists && d.data()) {
+        // 기본값을 베이스로 두고 저장된 값만 덮어씀 (새 kind 추가 시 누락 방지)
+        categoryWhitelist = Object.assign(JSON.parse(JSON.stringify(CATEGORY_WHITELIST_DEFAULT)), d.data());
+      } else {
+        categoryWhitelist = JSON.parse(JSON.stringify(CATEGORY_WHITELIST_DEFAULT));
+      }
+    }, err => {
+      console.warn('category_whitelist sync error, using default:', err);
     });
 
   } catch(e) {
@@ -1230,25 +1277,83 @@ function projectOptions(selected) {
     assetProjects.map(p => `<option value="${p}"${p===selected?' selected':''}>${p}</option>`).join('');
 }
 
-// 템플릿별 카테고리 화이트리스트 (Tim 확정 2026-05-14)
-// 자산관리에 등록된 정확한 이름과 일치해야 함
-const CATEGORY_WHITELIST = {
+// 문서종류(정형 양식)별 카테고리 화이트리스트.
+// 기본값(seed/fallback) — Firestore meta/category_whitelist 가 없을 때 사용.
+// 자산관리에 등록된 정확한 이름과 일치해야 함. (최초 Tim 확정 2026-05-14)
+const CATEGORY_WHITELIST_DEFAULT = {
   card_expense:     ['경상개발비','교육훈련비','운반비','복리후생비(식비)','복리후생비(접대)','비품(자산)','소모품비','여비교통비','차량유지비'],
   payroll:          ['급여(프리)','급여(직원)','원재료','지급임차료'],
   recurring:        ['통신비','수도광열비(공과금)','보험료','세금과공과'],
   purchase_request: ['소모품비','비품(자산)','장비구매','복리후생비(생필품)','교육훈련비','운반비'],
 };
+// 라이브 화이트리스트 — Firestore에서 로드되면 덮어씀. Admin이 화면에서 편집/저장.
+let categoryWhitelist = JSON.parse(JSON.stringify(CATEGORY_WHITELIST_DEFAULT));
+
+// 카테고리 설정 모달에 노출할 정형 양식 목록 (문서종류)
+const STRUCTURED_KINDS = [
+  { kind: 'card_expense',     label: '💸 법인카드 지출결의서 / Expense' },
+  { kind: 'payroll',          label: '🧾 외주비·급여 지급 / Payroll' },
+  { kind: 'recurring',        label: '🔁 정기지출 / Recurring' },
+  { kind: 'purchase_request', label: '🛒 구매요청 / Purchase Request' },
+];
 
 function categoryOptions(selected, kind) {
   // When prefilling from vendor invoice, show ALL categories (bypass whitelist)
   const bypassWhitelist = !!(window.viPrefill && window.viPrefill.viId);
-  const whitelist = bypassWhitelist ? null : ((kind && CATEGORY_WHITELIST[kind]) ? CATEGORY_WHITELIST[kind] : null);
+  const whitelist = bypassWhitelist ? null : ((kind && categoryWhitelist[kind]) ? categoryWhitelist[kind] : null);
   let list = assetCategories;
   if (whitelist && whitelist.length) {
     list = whitelist.filter(c => assetCategories.includes(c));
   }
   return '<option value="">— 선택 / Select Category —</option>' +
     list.map(c => `<option value="${c}"${c===selected?' selected':''}>${c}</option>`).join('');
+}
+
+// ── 문서종류별 카테고리 설정 (Admin) ──
+function openCategoryConfigModal() {
+  if (!currentUser || currentUser.role !== 'Admin') {
+    alert('관리자(Admin)만 카테고리를 설정할 수 있습니다.');
+    return;
+  }
+  const sel = document.getElementById('ccKind');
+  sel.innerHTML = STRUCTURED_KINDS.map(k => `<option value="${k.kind}">${k.label}</option>`).join('');
+  renderCategoryConfigList();
+  document.getElementById('categoryConfigModal').classList.add('open');
+}
+
+function renderCategoryConfigList() {
+  const kind = document.getElementById('ccKind').value;
+  const selected = categoryWhitelist[kind] || [];
+  // 자산관리 전체 카테고리 + 현재 화이트리스트에만 있는(자산관리에서 빠진) 항목까지 모두 노출
+  const all = Array.from(new Set([...(assetCategories || []), ...selected]));
+  all.sort((a, b) => a.localeCompare(b, 'ko'));
+  const wrap = document.getElementById('ccCategoryList');
+  if (!all.length) {
+    wrap.innerHTML = '<div style="color:var(--mid);font-size:0.85rem;">카테고리 목록을 불러오지 못했습니다.</div>';
+    return;
+  }
+  wrap.innerHTML = all.map(c => {
+    const checked = selected.includes(c) ? ' checked' : '';
+    const missing = !(assetCategories || []).includes(c)
+      ? ' <span style="font-size:0.7rem;color:var(--red);">(자산관리 없음)</span>' : '';
+    return `<label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;cursor:pointer;padding:0.2rem 0;">
+      <input type="checkbox" class="cc-cat-box" value="${c}"${checked} style="width:auto;margin:0;cursor:pointer;">
+      <span>${c}${missing}</span>
+    </label>`;
+  }).join('');
+}
+
+function saveCategoryConfig() {
+  if (!currentUser || currentUser.role !== 'Admin') { alert('관리자(Admin)만 가능합니다.'); return; }
+  const kind = document.getElementById('ccKind').value;
+  const checked = Array.from(document.querySelectorAll('#ccCategoryList .cc-cat-box:checked')).map(b => b.value);
+  if (!checked.length && !confirm('선택된 카테고리가 없습니다. 이 문서종류에는 카테고리가 표시되지 않습니다. 그래도 저장할까요?')) return;
+  // 로컬 즉시 반영(스냅샷 도착 전에도 모달 재선택 시 일관)
+  categoryWhitelist[kind] = checked;
+  db.collection('meta').doc('category_whitelist')
+    .set({ [kind]: checked, updated_at: Date.now(), updated_by: currentUser.id }, { merge: true })
+    .then(() => { closeModal('categoryConfigModal'); alert('✓ 저장되었습니다. 전 직원에게 즉시 반영됩니다.'); })
+    .catch(e => alert('저장 오류: ' + e.message));
 }
 
 const PAYMENT_METHODS = ['아마존카드','법인카드','법인통장'];
