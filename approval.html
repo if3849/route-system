@@ -581,6 +581,17 @@
           <button class="btn btn-gold" onclick="openCategoryConfigModal()">⚙️ 카테고리 설정 관리</button>
         </div>
       </div>
+
+      <div class="settings-card">
+        <div class="settings-head">🏬 구매 벤더 관리 / Purchase Vendors</div>
+        <div class="info-box">
+          구매요청(PO) 폼의 <strong>사용처(Vendor)</strong> 드롭다운 목록을 직접 관리합니다 (Amazon · Home Depot · Lowe's 등).<br>
+          추가/삭제 후 저장하면 코드 수정·배포 없이 전 직원에게 즉시 반영됩니다.
+        </div>
+        <div style="margin-top:1.2rem;">
+          <button class="btn btn-gold" onclick="openVendorConfigModal()">⚙️ 벤더 목록 관리</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -713,6 +724,29 @@
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('categoryConfigModal')">Cancel</button>
       <button class="btn btn-gold" onclick="saveCategoryConfig()">저장 / Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- VENDOR CONFIG MODAL -->
+<div class="modal-overlay" id="vendorConfigModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🏬 구매 벤더 관리 / Purchase Vendors</div>
+      <button class="modal-close" onclick="closeModal('vendorConfigModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.8rem;line-height:1.5;">
+        구매요청(PO) 폼의 <strong>사용처(Vendor)</strong> 드롭다운 목록입니다. 추가/삭제 후 저장하면 전 직원에게 즉시 반영됩니다.<br>
+        · <strong>Amazon 특수</strong> 체크 시 그 벤더는 Amazon 링크·체크아웃 UI + "🛒 Amazon (PO 복사)" 버튼이 뜹니다.<br>
+        · <strong>URL</strong>을 넣으면 승인 후 "📋 PO 복사" 버튼이 그 사이트를 함께 엽니다 (홈디포/로어스 Pro 등, 선택).
+      </div>
+      <div id="vcList"></div>
+      <button class="btn btn-outline" onclick="addVendorRow()" style="margin-top:0.6rem;">+ 벤더 추가 / Add Vendor</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('vendorConfigModal')">Cancel</button>
+      <button class="btn btn-gold" onclick="saveVendorConfig()">저장 / Save</button>
     </div>
   </div>
 </div>
@@ -905,6 +939,22 @@ window.addEventListener('load', function() {
       console.warn('category_whitelist sync error, using default:', err);
     });
 
+    // 구매 벤더 목록 (Admin이 화면에서 편집) — 실시간 구독
+    db.collection('meta').doc('vendor_list').onSnapshot(d => {
+      if (d.exists && d.data() && Array.isArray(d.data().vendors)) {
+        vendorList = d.data().vendors;
+      } else {
+        vendorList = JSON.parse(JSON.stringify(VENDOR_LIST_DEFAULT));
+      }
+      // 현재 구매요청 폼이 열려 있으면 벤더 드롭다운 즉시 갱신
+      if (currentStructuredKind === 'purchase_request') {
+        const sel = document.getElementById('ap_vendor');
+        if (sel) sel.innerHTML = vendorOptions(sel.value);
+      }
+    }, err => {
+      console.warn('vendor_list sync error, using default:', err);
+    });
+
   } catch(e) {
     console.error('Firebase init error:', e);
     showFirebaseError();
@@ -1092,8 +1142,8 @@ async function sendEmail(toId, doc, action, comment) {
         comment: comment || '—',
         priority: doc.priority,
         login_url: window.location.href.split('?')[0],
-        // Amazon 구매 요청 승인 알림에만 추가 — 메일에서 바로 결제 진행 가능
-        is_amazon_purchase: !!(doc.structuredData && doc.structuredData.kind === 'purchase_request'),
+        // Amazon 구매 요청 승인 알림에만 추가 — 메일에서 바로 결제 진행 가능 (일반 벤더는 제외)
+        is_amazon_purchase: isAmazonDoc(doc),
         amazon_link: (doc.structuredData && doc.structuredData.link) || ''
       })
     });
@@ -1289,6 +1339,35 @@ const CATEGORY_WHITELIST_DEFAULT = {
 // 라이브 화이트리스트 — Firestore에서 로드되면 덮어씀. Admin이 화면에서 편집/저장.
 let categoryWhitelist = JSON.parse(JSON.stringify(CATEGORY_WHITELIST_DEFAULT));
 
+// 구매요청(PO) 벤더 목록 기본값(seed/fallback) — Firestore meta/vendor_list 가 없을 때 사용.
+// { name, amazon(특수 UI 여부), url(승인후 PO복사 버튼이 열 사이트, 선택) }
+const VENDOR_LIST_DEFAULT = [
+  { name: 'Amazon',      amazon: true,  url: '' },
+  { name: 'Home Depot',  amazon: false, url: 'https://www.homedepot.com' },
+  { name: "Lowe's",      amazon: false, url: 'https://www.lowes.com' },
+];
+// 라이브 벤더 목록 — Firestore에서 로드되면 덮어씀. Admin이 화면에서 편집/저장.
+let vendorList = JSON.parse(JSON.stringify(VENDOR_LIST_DEFAULT));
+function findVendor(name) { return vendorList.find(v => v.name === name); }
+// 벤더가 Amazon 특수처리 대상인지 (레거시 구매요청 문서는 vendor 필드가 없으므로 Amazon으로 간주)
+function isAmazonVendor(name) {
+  if (!name) return true;
+  const v = findVendor(name);
+  return !!(v && v.amazon);
+}
+function isAmazonDoc(doc) {
+  const sd = doc && doc.structuredData;
+  if (!sd || sd.kind !== 'purchase_request') return false;
+  return isAmazonVendor(sd.vendor);
+}
+function vendorOptions(selected) {
+  return '<option value="">— 선택 / Select Vendor —</option>' +
+    vendorList.map(v => {
+      const n = (v.name || '').replace(/"/g, '&quot;');
+      return `<option value="${n}"${v.name === selected ? ' selected' : ''}>${v.name}</option>`;
+    }).join('');
+}
+
 // 카테고리 설정 모달에 노출할 정형 양식 목록 (문서종류)
 const STRUCTURED_KINDS = [
   { kind: 'card_expense',     label: '💸 법인카드 지출결의서 / Expense' },
@@ -1353,6 +1432,52 @@ function saveCategoryConfig() {
   db.collection('meta').doc('category_whitelist')
     .set({ [kind]: checked, updated_at: Date.now(), updated_by: currentUser.id }, { merge: true })
     .then(() => { closeModal('categoryConfigModal'); alert('✓ 저장되었습니다. 전 직원에게 즉시 반영됩니다.'); })
+    .catch(e => alert('저장 오류: ' + e.message));
+}
+
+// ── 구매 벤더 관리 (Admin) ──
+function openVendorConfigModal() {
+  if (!currentUser || currentUser.role !== 'Admin') {
+    alert('관리자(Admin)만 벤더를 설정할 수 있습니다.');
+    return;
+  }
+  renderVendorConfigList(vendorList);
+  document.getElementById('vendorConfigModal').classList.add('open');
+}
+function vendorRowHtml(v) {
+  v = v || { name:'', amazon:false, url:'' };
+  const name = (v.name || '').replace(/"/g, '&quot;');
+  const url = (v.url || '').replace(/"/g, '&quot;');
+  return `<div class="vc-row" style="display:grid;grid-template-columns:1.3fr auto 1.6fr auto;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
+    <input class="field-input vc-name" type="text" value="${name}" placeholder="벤더명 (예: Home Depot)">
+    <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.76rem;white-space:nowrap;cursor:pointer;"><input type="checkbox" class="vc-amazon" style="width:auto;margin:0;cursor:pointer;"${v.amazon?' checked':''}>Amazon 특수</label>
+    <input class="field-input vc-url" type="url" value="${url}" placeholder="https:// (선택)">
+    <button type="button" class="btn-sm btn-sm-outline" onclick="this.closest('.vc-row').remove()">삭제</button>
+  </div>`;
+}
+function renderVendorConfigList(list) {
+  const rows = (list && list.length) ? list : [{}];
+  document.getElementById('vcList').innerHTML = rows.map(vendorRowHtml).join('');
+}
+function addVendorRow() {
+  document.getElementById('vcList').insertAdjacentHTML('beforeend', vendorRowHtml());
+}
+function saveVendorConfig() {
+  if (!currentUser || currentUser.role !== 'Admin') { alert('관리자(Admin)만 가능합니다.'); return; }
+  const rows = Array.from(document.querySelectorAll('#vcList .vc-row'));
+  const vendors = [];
+  for (const r of rows) {
+    const name = r.querySelector('.vc-name').value.trim();
+    if (!name) continue;
+    vendors.push({ name, amazon: r.querySelector('.vc-amazon').checked, url: r.querySelector('.vc-url').value.trim() });
+  }
+  const names = vendors.map(v => v.name);
+  if (new Set(names).size !== names.length) { alert('벤더명이 중복됩니다. 중복을 제거하세요.'); return; }
+  if (!vendors.length && !confirm('벤더가 하나도 없습니다. 구매요청 폼에 사용처 목록이 비게 됩니다. 그래도 저장할까요?')) return;
+  vendorList = vendors; // 로컬 즉시 반영
+  db.collection('meta').doc('vendor_list')
+    .set({ vendors, updated_at: Date.now(), updated_by: currentUser.id })
+    .then(() => { closeModal('vendorConfigModal'); alert('✓ 저장되었습니다. 전 직원에게 즉시 반영됩니다.'); })
     .catch(e => alert('저장 오류: ' + e.message));
 }
 
@@ -1526,13 +1651,16 @@ function renderRecurringForm(d) {
   `;
 }
 
-// ── Amazon 구매 요청 ──
+// ── 구매 요청 (PO) — 벤더 선택형 ──
 function renderAmazonPurchaseForm(d) {
   const poDisplay = editingDocId ? (docs.find(x=>x.id===editingDocId)?.docNo || '제출 시 발급') : '(제출 시 발급)';
+  // 레거시 구매요청 문서(vendor 필드 없음)는 Amazon으로 간주. 신규 문서는 기본 Amazon 선택.
+  const dv = d.vendor || 'Amazon';
+  const isAmz = isAmazonVendor(dv);
   return `
     <div style="background:rgba(255,153,0,0.06);border:1px solid rgba(255,153,0,0.3);border-radius:10px;padding:14px;margin-bottom:1rem;">
       <div style="margin-bottom:0.8rem;">
-        <div style="font-size:0.95rem;color:#ff9900;font-weight:700;margin-bottom:4px;">🛒 Amazon 구매 요청 / Amazon Purchase Request</div>
+        <div id="ap_form_title" style="font-size:0.95rem;color:#ff9900;font-weight:700;margin-bottom:4px;">🛒 ${dv} 구매 요청 / Purchase Request</div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:0.75rem;color:var(--text-dim);flex-wrap:wrap;">
           <span>✅ 승인 시 자산관리 자동 입력</span>
           <span style="white-space:nowrap;">PO No: <span style="font-family:var(--mono);color:#ff9900;font-weight:700;">${poDisplay}</span></span>
@@ -1540,19 +1668,21 @@ function renderAmazonPurchaseForm(d) {
       </div>
       <div style="font-size:0.72rem;color:var(--text-dim);background:rgba(255,153,0,0.08);border-left:3px solid #ff9900;padding:6px 10px;border-radius:4px;margin-bottom:0.7rem;">💡 위 <strong>TITLE</strong> 입력란이 품목명이 됩니다 (예: "Dell 27인치 모니터")</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
-        <div style="grid-column:1/3;">
+        <div style="grid-column:1/3;"><label class="field-label">사용처 / Vendor *</label><select class="field-input" id="ap_vendor" onchange="onPurchaseVendorChange()">${vendorOptions(dv)}</select></div>
+        <div id="ap_amazon_only" style="grid-column:1/3;display:${isAmz?'':'none'};">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
             <label class="field-label" style="margin-bottom:0;">Amazon 링크</label>
             <button type="button" class="btn-expand-trigger" onclick="pasteAmazonLinkFromClipboard()">📋 클립보드에서 붙여넣기</button>
           </div>
           <input class="field-input" type="url" id="ap_link" value="${(d.link||'').replace(/"/g,'&quot;')}" oninput="renderStructuredContent()" placeholder="https://www.amazon.com/... (또는 위 버튼 클릭)"/>
         </div>
+        <div id="ap_generic_note" style="grid-column:1/3;display:${isAmz?'none':''};font-size:0.72rem;color:var(--text-dim);background:rgba(99,102,241,0.06);border-left:3px solid #6366f1;padding:8px 10px;border-radius:4px;">💡 <strong>Pro(상업)계정</strong>이면 승인 후 발급되는 PO 번호를 체크아웃에 입력해 결제하세요. <strong>매장 카드결제</strong> 건은 구매 후 영수증을 이 결재에 첨부하면 됩니다.</div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="ap_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'purchase_request')}</select></div>
         <div><label class="field-label">프로젝트 *</label><select class="field-input" id="ap_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
         <div><label class="field-label">수량</label><input class="field-input" type="number" min="1" step="1" id="ap_qty" value="${d.qty||1}" oninput="renderStructuredContent()"/></div>
         <div><label class="field-label">금액 USD (Tax 포함 최종 금액) *</label><input class="field-input" type="text" inputmode="decimal" id="ap_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
         <div style="grid-column:1/3;"><label class="field-label">결제수단 *</label><select class="field-input" id="ap_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'')}</select></div>
-        <div style="grid-column:1/3;font-size:0.72rem;color:#fbbf24;background:rgba(251,191,36,0.08);border-left:3px solid #fbbf24;padding:8px 10px;border-radius:4px;">⚠️ <strong>금액은 반드시 Amazon 체크아웃의 Tax·Shipping 포함 최종 금액</strong>을 입력하세요.<br>장바구니에서 "Proceed to Checkout" 클릭 → Place Order 직전 페이지의 Total 금액 → 결재 입력 (주문은 결재 승인 후 진행)</div>
+        <div id="ap_amount_warn" style="grid-column:1/3;font-size:0.72rem;color:#fbbf24;background:rgba(251,191,36,0.08);border-left:3px solid #fbbf24;padding:8px 10px;border-radius:4px;">⚠️ <strong>금액은 Tax·Shipping 포함 최종 결제금액</strong>을 입력하세요. <span id="ap_amount_warn_amz" style="display:${isAmz?'':'none'};">장바구니 "Proceed to Checkout" → Place Order 직전 Total 금액을 입력 (주문은 승인 후 진행).</span></div>
         <div style="grid-column:1/3;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
             <label class="field-label" style="margin-bottom:0;">사용 목적 / Purpose *</label>
@@ -1564,6 +1694,22 @@ function renderAmazonPurchaseForm(d) {
     </div>
     <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input" id="docContent" readonly style="min-height:140px;background:rgba(99,102,241,0.05);border-style:dashed;font-family:monospace;white-space:pre-wrap;"></textarea></div>
   `;
+}
+
+// 구매요청 벤더 변경 시 — Amazon 전용 UI 토글 + 결제수단 기본값 + 헤더/미리보기 갱신
+function onPurchaseVendorChange() {
+  const sel = document.getElementById('ap_vendor');
+  if (!sel) return;
+  const name = sel.value;
+  const isAmz = isAmazonVendor(name);
+  const az = document.getElementById('ap_amazon_only'); if (az) az.style.display = isAmz ? '' : 'none';
+  const gn = document.getElementById('ap_generic_note'); if (gn) gn.style.display = isAmz ? 'none' : '';
+  const wz = document.getElementById('ap_amount_warn_amz'); if (wz) wz.style.display = isAmz ? '' : 'none';
+  const h = document.getElementById('ap_form_title'); if (h) h.textContent = `🛒 ${name || ''} 구매 요청 / Purchase Request`.replace('🛒  ', '🛒 ');
+  // 결제수단 미선택 시 벤더에 맞는 기본값 자동 지정 (사용자가 이미 골랐으면 유지)
+  const pm = document.getElementById('ap_paymentMethod');
+  if (pm && !pm.value) pm.value = isAmz ? '아마존카드' : '법인카드';
+  renderStructuredContent();
 }
 
 // ── 미리보기 렌더링 (구조화 데이터 → 텍스트) ──
@@ -1642,12 +1788,18 @@ ${payeeLines}
 ${note || ''}`;
   } else if (kind === 'purchase_request') {
     const item = (document.getElementById('docTitle')?.value || '').trim();
+    const vendor = v('ap_vendor') || 'Amazon';
+    const isAmz = isAmazonVendor(vendor);
     const link = v('ap_link'), cat = v('ap_category'),
           proj = v('ap_project'), qty = v('ap_qty')||'1', amount = v('ap_amount'),
           purpose = v('ap_purpose');
     const poDisplay = editingDocId ? (docs.find(x=>x.id===editingDocId)?.docNo || '(제출 시 발급)') : '(제출 시 발급)';
-    txt = `[Amazon 구매 요청]
+    const footer = isAmz
+      ? '* 승인 후 [Amazon 열기 + PO 복사] 버튼으로 PO 번호를 받아 Amazon 체크아웃에 입력하여 결제하세요.'
+      : '* 승인 후 [PO 복사] 버튼으로 PO 번호를 받으세요. Pro(상업)계정은 체크아웃에 PO 입력, 매장 카드결제는 구매 후 영수증을 이 결재에 첨부하세요.';
+    txt = `[${vendor} 구매 요청]
 PO No: ${poDisplay}
+사용처: ${vendor}
 품목: ${item}
 ${link ? '링크: ' + link + '\n' : ''}카테고리: ${cat}
 프로젝트: ${proj}
@@ -1657,7 +1809,7 @@ ${link ? '링크: ' + link + '\n' : ''}카테고리: ${cat}
 [사용 목적]
 ${purpose || ''}
 
-* 승인 후 [Amazon 열기 + PO 복사] 버튼으로 PO 번호를 받아 Amazon 체크아웃에 입력하여 결제하세요.`;
+${footer}`;
   }
   const dc = document.getElementById('docContent');
   if (dc) dc.value = txt;
@@ -1722,7 +1874,7 @@ function collectStructuredData() {
   }
   if (kind === 'purchase_request') {
     const title = (document.getElementById('docTitle')?.value || '').trim();
-    return { kind, item:title, link:v('ap_link'), category:v('ap_category'),
+    return { kind, vendor:v('ap_vendor')||'Amazon', item:title, link:v('ap_link'), category:v('ap_category'),
              project:v('ap_project'), qty:parseInt(v('ap_qty'))||1,
              amount:parseFormattedNumber(v('ap_amount')), purpose:v('ap_purpose'),
              paymentMethod:v('ap_paymentMethod') };
@@ -1741,7 +1893,7 @@ function validateStructured() {
   } else if (d.kind === 'recurring') {
     if (!d.billingMonth || !d.vendor || !d.category || !d.project || !d.amount) return '모든 필수 필드를 입력하세요.';
   } else if (d.kind === 'purchase_request') {
-    if (!d.item || !d.category || !d.project || !d.amount || !d.purpose) return '필수 항목(Title=품목명 / 카테고리 / 프로젝트 / 금액 / 사용목적)을 입력하세요.';
+    if (!d.vendor || !d.item || !d.category || !d.project || !d.amount || !d.purpose) return '필수 항목(사용처 / Title=품목명 / 카테고리 / 프로젝트 / 금액 / 사용목적)을 입력하세요.';
   }
   // 결제수단 필수 — 모든 정형 양식 공통
   if (!d.paymentMethod || d.paymentMethod === '미분류') return '결제수단(Payment Method)을 선택해 주세요.';
@@ -2045,15 +2197,19 @@ function buildActions(doc, mode) {
   // 결제 완료 상태 판정 (history에 amount_updated가 있으면 = 직원이 실제 결제 후 금액 확인 완료)
   const purchaseComplete = (doc.history || []).some(h => h.action === 'amount_updated');
 
-  // ★ Amazon 구매 요청 — 결제 완료 전에는 PO 복사 버튼, 완료 후에는 "✓ 결제 완료" 배지
+  // ★ 구매 요청 — 결제 완료 전에는 PO 복사 버튼(벤더별), 완료 후에는 "✓ 결제 완료" 배지
   if (mode === 'mine'
       && doc.status === 'approved'
       && doc.requesterId === currentUser.id
       && doc.structuredData && doc.structuredData.kind === 'purchase_request') {
     if (purchaseComplete) {
-      b += ` <span style="display:inline-block;background:rgba(16,185,129,0.15);color:#10b981;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:700;border:1px solid #10b981;">✓ Amazon 결제 완료</span>`;
-    } else {
+      b += ` <span style="display:inline-block;background:rgba(16,185,129,0.15);color:#10b981;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:700;border:1px solid #10b981;">✓ 결제 완료</span>`;
+    } else if (isAmazonDoc(doc)) {
       b += ` <button class="btn-sm" style="background:#ff9900;color:#000;font-weight:600;" onclick="openAmazonWithPO('${doc.docNo}','${doc.structuredData.link?encodeURIComponent(doc.structuredData.link):''}')">🛒 Amazon (PO 복사)</button>`;
+    } else {
+      const ven = findVendor(doc.structuredData.vendor);
+      const url = (ven && ven.url) ? encodeURIComponent(ven.url) : '';
+      b += ` <button class="btn-sm" style="background:#6366f1;color:#fff;font-weight:600;" onclick="copyPoNumber('${doc.docNo}','${url}')">📋 PO 복사</button>`;
     }
   }
   // ★ 결제액 갱신 — Amazon 구매(purchase_request)에만 노출. 다른 정형 결재는 영수증·청구서 금액이 곧 최종액
@@ -2139,6 +2295,22 @@ async function openAmazonWithPO(poNo, encodedLink) {
     prompt(`PO 번호를 직접 복사하세요 (Ctrl+C 후 Enter):`, poNo);
   }
   window.open(url, '_blank', 'noopener');
+}
+
+// ── 일반 벤더 구매 요청 — PO 클립보드 복사 (+ 등록된 벤더 사이트 열기, 선택) ──
+async function copyPoNumber(poNo, encodedUrl) {
+  const url = encodedUrl ? decodeURIComponent(encodedUrl) : '';
+  let copied = false;
+  try { await navigator.clipboard.writeText(poNo); copied = true; } catch(e) { copied = false; }
+  if (copied) {
+    alert(`✓ PO 번호 ${poNo} 가 클립보드에 복사되었습니다.\n\n` +
+          `· Pro(상업)계정 결제: 체크아웃 PO 칸에 Ctrl+V (또는 ⌘+V)\n` +
+          `· 매장 카드결제: 구매 후 영수증을 이 결재에 첨부하세요.\n\n` +
+          `* 이미 자산관리에 자동 입력되었습니다.`);
+  } else {
+    prompt(`PO 번호를 직접 복사하세요 (Ctrl+C 후 Enter):`, poNo);
+  }
+  if (url) window.open(url, '_blank', 'noopener');
 }
 
 function filterTable(id, q) {
@@ -2783,7 +2955,8 @@ async function syncDocToAssetManager(doc) {
   const kind = sd.kind;
   if (!kind) return { ok:false, error:'no structured data' };
 
-  const defaultPM = { card_expense:'법인카드', payroll:'법인통장', recurring:'법인통장', purchase_request:'아마존카드' }[kind] || '미분류';
+  const prDefaultPM = isAmazonVendor(sd.vendor) ? '아마존카드' : '법인카드';
+  const defaultPM = { card_expense:'법인카드', payroll:'법인통장', recurring:'법인통장', purchase_request:prDefaultPM }[kind] || '미분류';
   let payload = { source_doc_no: doc.docNo, attachments: doc.attachments || [], type:'매입',
                   payment_method: sd.paymentMethod || defaultPM };
   if (kind === 'card_expense') {
@@ -2819,12 +2992,12 @@ async function syncDocToAssetManager(doc) {
     payload.amount = sd.amount;
     payload.note = doc.content || '';
   } else if (kind === 'purchase_request') {
-    // Amazon 구매 요청: 승인일을 거래일로, vendor=Amazon, PO=docNo
+    // 구매 요청: 승인일을 거래일로, vendor=선택값(레거시는 Amazon), PO=docNo
     const approvedAt = (doc.history || []).slice().reverse().find(h => h.action === 'approved');
     const ts = approvedAt ? approvedAt.at : Date.now();
     const d = new Date(ts);
     payload.date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    payload.vendor = 'Amazon';
+    payload.vendor = sd.vendor || 'Amazon';
     payload.category = sd.category;
     payload.project = sd.project;
     payload.amount = sd.amount;
