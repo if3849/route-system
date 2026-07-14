@@ -772,6 +772,15 @@
 </div>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// ── 날짜 입력: 수기 타이핑 차단 (달력 선택만 허용, 오타로 인한 잘못된 날짜 방지) ──
+document.addEventListener('keydown', function(e){
+  var t = e.target;
+  if (t && t.matches && t.matches('input[type="date"]')) {
+    // 접근성: Tab 이동과 Esc 는 허용, 나머지 키 입력은 무시 (달력 피커는 정상 작동)
+    if (e.key === 'Tab' || e.key === 'Escape') return;
+    e.preventDefault();
+  }
+});
 // ── 전역 변수 ──
 let users = [];
 let usersLoaded = false;
