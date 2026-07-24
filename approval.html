@@ -1130,7 +1130,7 @@ async function removeDoc(docId) { await db.collection('documents').doc(docId).de
 async function sendEmail(toId, doc, action, comment) {
   const toUser = users.find(u => u.id === toId);
   if (!toUser || !toUser.email) return;
-  const requester = users.find(u => u.id === doc.requesterId);
+  const requester = users.find(u => sameId(u.id, doc.requesterId));
   const fromEmail = (currentUser && currentUser.email)
     ? currentUser.email
     : (requester && requester.email ? requester.email : '');
@@ -1176,6 +1176,9 @@ async function doLogin() {
     const match = users.find(u => u.id === idInput);
     if (match && match.email) email = match.email;
   }
+  // 이메일은 대소문자 무시 — requesterId(신청자 정체성) 통일. 핸드폰 첫 글자 자동 대문자로
+  // 인해 같은 사람이 두 정체성으로 갈라지고 문서가 중복 생성되던 문제 방지.
+  if (email.includes('@')) email = email.toLowerCase();
   try {
     const cred = await firebase.auth().signInWithEmailAndPassword(email, pw);
     let user = usersLoaded
@@ -1971,11 +1974,11 @@ function refreshAll() {
 
 function canViewDoc(doc) {
   // Draft는 작성자 본인에게만 보임 (Admin이라도 타인의 draft는 볼 수 없음)
-  if (doc.status === 'draft') return doc.requesterId === currentUser.id;
+  if (doc.status === 'draft') return sameId(doc.requesterId, currentUser.id);
   if (currentUser.role === 'Admin') return true;
-  if (doc.requesterId === currentUser.id) return true;
-  if ((doc.approvers || []).some(a => a.id === currentUser.id)) return true;
-  if ((doc.cc || []).some(c => c === currentUser.id)) return true;
+  if (sameId(doc.requesterId, currentUser.id)) return true;
+  if ((doc.approvers || []).some(a => sameId(a.id, currentUser.id))) return true;
+  if ((doc.cc || []).some(c => sameId(c, currentUser.id))) return true;
   return false;
 }
 function getVisibleDocs() { return docs.filter(d => canViewDoc(d)); }
@@ -1983,7 +1986,7 @@ function getVisibleDocs() { return docs.filter(d => canViewDoc(d)); }
 function refreshPage(name) {
   const visible = getVisibleDocs();
   if (name === 'dashboard') renderDashboard();
-  if (name === 'mine') renderTable('mineTable', visible.filter(d => d.requesterId === currentUser.id), 'mine');
+  if (name === 'mine') renderTable('mineTable', visible.filter(d => sameId(d.requesterId, currentUser.id)), 'mine');
   if (name === 'pending') renderTable('pendingTable', visible.filter(d => isMyTurn(d)), 'pending');
   if (name === 'all') renderTable('allTable', visible, 'all');
   if (name === 'users') renderUsers();
@@ -2018,7 +2021,7 @@ function editDoc(docId) {
   const doc = docs.find(d => d.id === docId);
   if (!doc) return;
   if (doc.status !== 'rejected' && doc.status !== 'draft') return;
-  if (doc.requesterId !== currentUser.id) return;
+  if (!sameId(doc.requesterId, currentUser.id)) return;
 
   editingDocId = docId;
   const isDraft = doc.status === 'draft';
@@ -2162,7 +2165,8 @@ function statusBadgeFor(doc) {
   return html;
 }
 function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-US', {year:'numeric', month:'short', day:'numeric'}); }
-function getUserName(id) { const u = users.find(u => u.id === id); return u ? u.name : id; }
+function sameId(a, b) { return !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase(); }
+function getUserName(id) { const u = users.find(u => sameId(u.id, id)); return u ? u.name : id; }
 
 function renderTable(tbodyId, data, mode) {
   const tb = document.getElementById(tbodyId); if (!tb) return;
@@ -2200,7 +2204,7 @@ function buildActions(doc, mode) {
     b += `<button class="btn-sm" style="background:var(--red);color:white" onclick="openApprove('${doc.id}','reject')">Reject</button>`;
   }
   // ★ 반려/임시저장된 내 문서에 Edit 버튼 표시
-  if (mode === 'mine' && (doc.status === 'rejected' || doc.status === 'draft') && doc.requesterId === currentUser.id) {
+  if (mode === 'mine' && (doc.status === 'rejected' || doc.status === 'draft') && sameId(doc.requesterId, currentUser.id)) {
     b += ` <button class="btn-sm" style="background:var(--blue);color:white;" onclick="editDoc('${doc.id}')">Edit</button>`;
   }
   // 결제 완료 상태 판정 (history에 amount_updated가 있으면 = 직원이 실제 결제 후 금액 확인 완료)
@@ -2209,7 +2213,7 @@ function buildActions(doc, mode) {
   // ★ 구매 요청 — 결제 완료 전에는 PO 복사 버튼(벤더별), 완료 후에는 "✓ 결제 완료" 배지
   if (mode === 'mine'
       && doc.status === 'approved'
-      && doc.requesterId === currentUser.id
+      && sameId(doc.requesterId, currentUser.id)
       && doc.structuredData && doc.structuredData.kind === 'purchase_request') {
     if (purchaseComplete) {
       b += ` <span style="display:inline-block;background:rgba(16,185,129,0.15);color:#10b981;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:700;border:1px solid #10b981;">✓ 결제 완료</span>`;
@@ -2225,7 +2229,7 @@ function buildActions(doc, mode) {
   //    완료 전(amount_updated 이력 없음)에만 표시 — 결제 완료 후에는 본인이 수정 불가 (실수 방지, 관리자가 자산관리에서 직접 처리)
   if (mode === 'mine'
       && doc.status === 'approved'
-      && doc.requesterId === currentUser.id
+      && sameId(doc.requesterId, currentUser.id)
       && doc.assetTxId
       && doc.structuredData && doc.structuredData.kind === 'purchase_request'
       && !purchaseComplete) {
@@ -2887,7 +2891,7 @@ function viewDoc(docId) {
       <button class="btn btn-red" onclick="closeModal('detailModal');openApprove('${doc.id}','reject')">Reject</button>`;
   }
   // View 모달에서도 Edit 버튼 (반려된 내 문서)
-  if (doc.status === 'rejected' && doc.requesterId === currentUser.id) {
+  if (doc.status === 'rejected' && sameId(doc.requesterId, currentUser.id)) {
     footer += ` <button class="btn" style="background:var(--blue);color:white;" onclick="closeModal('detailModal');editDoc('${doc.id}')">✏️ Edit & Resubmit</button>`;
   }
   document.getElementById('modalFooter').innerHTML = footer;
@@ -3188,7 +3192,7 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 function exportToExcel() {
   if (!docs.length) { alert('내보낼 문서가 없습니다.'); return; }
   const data = docs.map(d => {
-    const requester = users.find(u => u.id === d.requesterId);
+    const requester = users.find(u => sameId(u.id, d.requesterId));
     const approverNames = (d.approvers||[]).map((a, i) => {
       const u = users.find(u => u.id === a.id);
       return `Step${i+1}: ${u?u.name:a.id} (${a.status==='approved'?'✓승인':a.status==='rejected'?'✕반려':'대기'})`;
