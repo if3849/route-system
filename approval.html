@@ -329,6 +329,7 @@
     <div class="hub-topbar-logo">ROUTE <span>SYSTEM</span></div>
     <div class="hub-topbar-right">
       <div class="hub-topbar-user" id="hubUser">—</div>
+      <span id="branchSwitch"></span>
       <div class="hub-topbar-logout" onclick="doLogout()">Logout</div>
     </div>
   </div>
@@ -342,7 +343,7 @@
         <div class="hub-card-desc">Document Approval &amp; Workflow</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
-      <div class="hub-card" onclick="enterFieldReport()">
+      <div class="hub-card" id="hubCardField" onclick="enterFieldReport()">
         <span class="hub-card-icon">&#127959;</span>
         <div class="hub-card-title">Field Report</div>
         <div class="hub-card-desc">Construction Field Report</div>
@@ -803,13 +804,27 @@ const DOCS_COL = IS_KR ? 'documents_kr' : 'documents';   // KR 문서는 별도 
 const COUNTER_ID = IS_KR ? 'counter_kr' : 'counter';
 const DOCNO_PREFIX = IS_KR ? 'RSK-' : 'RSI-';
 const ASSET_BRANCH_Q = IS_KR ? '?branch=kr' : '';
-if (IS_KR) {
-  document.addEventListener('DOMContentLoaded', function(){
+function switchBranch(b){ try{ sessionStorage.setItem('rs_branch', String(b).toUpperCase()); }catch(e){} location.href = location.pathname + '?branch=' + b; }
+document.addEventListener('DOMContentLoaded', function(){
+  // 허브 상단 미국/한국 전환 스위치 (양쪽 모드에서 표시)
+  var sw = document.getElementById('branchSwitch');
+  if (sw) {
+    var onCss = 'background:var(--accent);color:#000;font-weight:700;';
+    var offCss = 'opacity:0.55;';
+    var base = 'cursor:pointer;padding:3px 9px;border-radius:5px;font-size:0.72rem;letter-spacing:1px;margin-left:4px;';
+    sw.innerHTML =
+      '<span onclick="switchBranch(\'us\')" style="'+base+(IS_KR?offCss:onCss)+'">🇺🇸 US</span>' +
+      '<span onclick="switchBranch(\'kr\')" style="'+base+(IS_KR?onCss:offCss)+'">🇰🇷 KR</span>';
+  }
+  if (IS_KR) {
     var el = document.getElementById('branchBadge');
     if (el) { el.textContent = '  🇰🇷 한국법인 (주)라우트시스템'; el.style.color = '#c8a96e'; el.style.fontWeight = '700'; el.style.fontSize = '0.8rem'; }
     document.title = '(주)라우트시스템 — 전자결재 (한국)';
-  });
-}
+    var hs = document.querySelector('#hubScreen .hub-subtitle'); if (hs) hs.textContent = '🇰🇷 (주)라우트시스템 · 한국지사 포털';
+    var ls = document.querySelector('#loginScreen .login-sub'); if (ls) ls.textContent = '🇰🇷 (주)라우트시스템 · 한국지사';
+    var fr = document.getElementById('hubCardField'); if (fr) fr.style.display = 'none';  // 한국 현장앱(공사일보) 아직 없음
+  }
+});
 let templates = [];
 let templatesLoaded = false;
 let templateApproverRows = [];
@@ -864,8 +879,8 @@ window.addEventListener('load', function() {
     try {
       const _ra = new URLSearchParams(window.location.search).get('reauth');
       const _RA_TARGETS = {
-        asset:       'http://routesystem.synology.me:8080/sso',
-        quotation:   'http://routesystem.synology.me:8082/sso',
+        asset:       'http://routesystem.synology.me:' + (IS_KR?'8090':'8080') + '/sso',
+        quotation:   'http://routesystem.synology.me:' + (IS_KR?'8092':'8082') + '/sso',
         fieldreport: 'http://98.167.239.190:3000/sso'
       };
       if (_ra && _RA_TARGETS[_ra]) {
@@ -1226,7 +1241,7 @@ async function enterAsset() {
     const u = firebase.auth().currentUser;
     if (!u) { alert('세션이 만료되었습니다. 다시 로그인해 주세요.'); return; }
     const token = await u.getIdToken(true);
-    window.open('http://routesystem.synology.me:8080/sso?token='+encodeURIComponent(token), '_blank');
+    window.open('http://routesystem.synology.me:' + (IS_KR?'8090':'8080') + '/sso?token='+encodeURIComponent(token), '_blank');
   } catch(e) { alert('Asset 접속 실패: '+e.message); }
 }
 async function enterFieldReport() {
@@ -1242,7 +1257,7 @@ async function enterQuotation() {
     const u = firebase.auth().currentUser;
     if (!u) { alert('세션이 만료되었습니다. 다시 로그인해 주세요.'); return; }
     const token = await u.getIdToken(true);
-    window.open('http://routesystem.synology.me:8082/sso?token='+encodeURIComponent(token), '_blank');
+    window.open('http://routesystem.synology.me:' + (IS_KR?'8092':'8082') + '/sso?token='+encodeURIComponent(token), '_blank');
   } catch(e) { alert('Quotation 접속 실패: '+e.message); }
 }
 function enterApproval() {
