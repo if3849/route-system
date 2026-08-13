@@ -339,32 +339,32 @@
     <div class="hub-cards">
       <div class="hub-card" onclick="enterApproval()">
         <span class="hub-card-icon">&#128221;</span>
-        <div class="hub-card-title">Approval</div>
-        <div class="hub-card-desc">Document Approval &amp; Workflow</div>
+        <div class="hub-card-title" data-ko="전자결재">Approval</div>
+        <div class="hub-card-desc" data-ko="문서 결재 · 워크플로우">Document Approval &amp; Workflow</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
       <div class="hub-card" id="hubCardField" onclick="enterFieldReport()">
         <span class="hub-card-icon">&#127959;</span>
-        <div class="hub-card-title">Field Report</div>
-        <div class="hub-card-desc">Construction Field Report</div>
+        <div class="hub-card-title" data-ko="현장일보">Field Report</div>
+        <div class="hub-card-desc" data-ko="공사 현장 보고">Construction Field Report</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
       <div class="hub-card" onclick="enterAsset()">
         <span class="hub-card-icon">&#128230;</span>
-        <div class="hub-card-title">Asset</div>
-        <div class="hub-card-desc">Asset Management System</div>
+        <div class="hub-card-title" data-ko="자산관리">Asset</div>
+        <div class="hub-card-desc" data-ko="자산 · 회계 관리">Asset Management System</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
       <div class="hub-card" onclick="enterQuotation()">
         <span class="hub-card-icon">&#129534;</span>
-        <div class="hub-card-title">Quotation / Invoice</div>
-        <div class="hub-card-desc">Create, Convert &amp; Archive</div>
+        <div class="hub-card-title" data-ko="견적서 · 인보이스">Quotation / Invoice</div>
+        <div class="hub-card-desc" data-ko="견적 작성 · 변환 · 보관">Create, Convert &amp; Archive</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
       <div class="hub-card" onclick="window.open('https://routesystemus.direct.quickconnect.to:5001/','_blank')">
         <span class="hub-card-icon">&#128190;</span>
-        <div class="hub-card-title">NAS(파일서버)</div>
-        <div class="hub-card-desc">File Server Access</div>
+        <div class="hub-card-title" data-ko="NAS 파일서버">NAS(파일서버)</div>
+        <div class="hub-card-desc" data-ko="파일 서버 접속">File Server Access</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
     </div>
@@ -809,12 +809,13 @@ document.addEventListener('DOMContentLoaded', function(){
   // 허브 상단 미국/한국 전환 스위치 (양쪽 모드에서 표시)
   var sw = document.getElementById('branchSwitch');
   if (sw) {
-    var onCss = 'background:var(--accent);color:#000;font-weight:700;';
-    var offCss = 'opacity:0.55;';
-    var base = 'cursor:pointer;padding:3px 9px;border-radius:5px;font-size:0.72rem;letter-spacing:1px;margin-left:4px;';
+    var onCss = 'background:var(--accent);color:#000;font-weight:800;border-color:var(--accent);box-shadow:0 2px 10px rgba(200,169,110,0.4);';
+    var offCss = 'background:transparent;color:var(--mid);font-weight:600;border-color:var(--gray);';
+    var base = 'cursor:pointer;padding:7px 15px;border-radius:9px;font-size:0.9rem;letter-spacing:0.5px;border:1.5px solid;display:inline-flex;align-items:center;gap:5px;transition:all .15s;';
     sw.innerHTML =
-      '<span onclick="switchBranch(\'us\')" style="'+base+(IS_KR?offCss:onCss)+'">🇺🇸 US</span>' +
-      '<span onclick="switchBranch(\'kr\')" style="'+base+(IS_KR?onCss:offCss)+'">🇰🇷 KR</span>';
+      '<span style="font-size:0.62rem;color:var(--mid);letter-spacing:2px;margin-right:9px;text-transform:uppercase;">지점 · Branch</span>' +
+      '<span onclick="switchBranch(\'us\')" style="'+base+(IS_KR?offCss:onCss)+'">🇺🇸 미국</span>' +
+      '<span onclick="switchBranch(\'kr\')" style="'+base+(IS_KR?onCss:offCss)+'margin-left:7px;">🇰🇷 한국</span>';
   }
   if (IS_KR) {
     var el = document.getElementById('branchBadge');
@@ -823,6 +824,11 @@ document.addEventListener('DOMContentLoaded', function(){
     var hs = document.querySelector('#hubScreen .hub-subtitle'); if (hs) hs.textContent = '🇰🇷 (주)라우트시스템 · 한국지사 포털';
     var ls = document.querySelector('#loginScreen .login-sub'); if (ls) ls.textContent = '🇰🇷 (주)라우트시스템 · 한국지사';
     var fr = document.getElementById('hubCardField'); if (fr) fr.style.display = 'none';  // 한국 현장앱(공사일보) 아직 없음
+    // 허브 앱 카드/문구 한글화
+    document.querySelectorAll('#hubScreen [data-ko]').forEach(function (el) {
+      var k = el.getAttribute('data-ko'); if (k) el.textContent = k;
+    });
+    var hf = document.querySelector('#hubScreen .hub-footer'); if (hf) hf.textContent = '(주)라우트시스템 — 한국지사 스태프 포털';
   }
 });
 let templates = [];
