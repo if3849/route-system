@@ -805,6 +805,26 @@ const COUNTER_ID = IS_KR ? 'counter_kr' : 'counter';
 const DOCNO_PREFIX = IS_KR ? 'RSK-' : 'RSI-';
 const ASSET_BRANCH_Q = IS_KR ? '?branch=kr' : '';
 function switchBranch(b){ try{ sessionStorage.setItem('rs_branch', String(b).toUpperCase()); }catch(e){} location.href = location.pathname + '?branch=' + b; }
+// 한국 모드: 전자결재 앱 화면(사이드바·대시보드·표 헤더·버튼)을 한글로 (US는 영문 유지)
+var _KRDICT = {
+  'Main':'메인','Documents':'문서','System':'시스템',
+  'Dashboard':'대시보드','New Document':'새 문서','My Documents':'내 문서','Pending Approval':'결재 대기','All Documents':'전체 문서','Users':'사용자','Settings':'설정',
+  'DASHBOARD':'대시보드','NEW DOCUMENT':'새 문서','MY DOCUMENTS':'내 문서','PENDING APPROVAL':'결재 대기','ALL DOCUMENTS':'전체 문서','USERS':'사용자 관리','SETTINGS':'설정',
+  'Overview':'개요','Create':'작성','My':'내 문서','Action Required':'조치 필요','Everything':'전체','Admin':'관리자',
+  'Total':'전체','Pending':'대기','Approved':'승인','Rejected':'반려',
+  'Recent Documents':'최근 문서','Documents I Submitted':'내가 올린 문서','Documents Awaiting Your Approval':'내 결재 대기 문서',
+  'Doc No.':'문서번호','Title':'제목','Type':'종류','Requester':'기안자','Progress':'진행','Date':'날짜','Status':'상태','Action':'처리','Priority':'우선순위','My Step':'내 차례','Name':'이름','Email':'이메일','Role':'권한','Step':'단계',
+  '+ New Document':'+ 새 문서','+ New':'+ 새로','Submit for Approval →':'결재 상신 →','Save as Draft':'임시저장','✕ Cancel':'✕ 취소',
+  'No documents found.':'문서가 없습니다.','Loading...':'불러오는 중...'
+};
+var _KRPLACE = { 'Search...':'검색...','Enter document title':'문서 제목 입력' };
+function translateApprovalKR(root){
+  root = root || document;
+  var sel = '.sidebar-section, .page-title-tag, .page-title, .stat-label, .table-title, th, .sidebar-item span, td.empty, .empty-state';
+  root.querySelectorAll(sel).forEach(function(el){ var k=(el.textContent||'').trim(); if(_KRDICT[k]!=null) el.textContent=_KRDICT[k]; });
+  root.querySelectorAll('button, .btn').forEach(function(b){ if(!b.children.length){ var k=(b.textContent||'').trim(); if(_KRDICT[k]!=null) b.textContent=_KRDICT[k]; } });
+  root.querySelectorAll('input[placeholder]').forEach(function(i){ var k=(i.getAttribute('placeholder')||'').trim(); if(_KRPLACE[k]!=null) i.setAttribute('placeholder',_KRPLACE[k]); });
+}
 document.addEventListener('DOMContentLoaded', function(){
   // 허브 상단 미국/한국 전환 스위치 (양쪽 모드에서 표시)
   var sw = document.getElementById('branchSwitch');
@@ -829,6 +849,14 @@ document.addEventListener('DOMContentLoaded', function(){
       var k = el.getAttribute('data-ko'); if (k) el.textContent = k;
     });
     var hf = document.querySelector('#hubScreen .hub-footer'); if (hf) hf.textContent = '(주)라우트시스템 — 한국지사 스태프 포털';
+    // 전자결재 앱 화면 한글화 (정적) + 동적 렌더 대응(표/빈문구 등)
+    translateApprovalKR();
+    try {
+      var _appEl = document.getElementById('app');
+      if (_appEl) new MutationObserver(function (muts) {
+        muts.forEach(function (m) { (m.addedNodes || []).forEach(function (n) { if (n.nodeType === 1) translateApprovalKR(n.parentElement || n); }); });
+      }).observe(_appEl, { childList: true, subtree: true });
+    } catch (e) {}
   }
 });
 let templates = [];
