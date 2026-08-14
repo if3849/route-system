@@ -807,22 +807,24 @@ const ASSET_BRANCH_Q = IS_KR ? '?branch=kr' : '';
 function switchBranch(b){ try{ sessionStorage.setItem('rs_branch', String(b).toUpperCase()); }catch(e){} location.href = location.pathname + '?branch=' + b; }
 // 한국 모드: 전자결재 앱 화면(사이드바·대시보드·표 헤더·버튼)을 한글로 (US는 영문 유지)
 var _KRDICT = {
-  'Main':'메인','Documents':'문서','System':'시스템',
+  'Main':'메인','Documents':'문서','System':'시스템','Configuration':'설정',
   'Dashboard':'대시보드','New Document':'새 문서','My Documents':'내 문서','Pending Approval':'결재 대기','All Documents':'전체 문서','Users':'사용자','Settings':'설정',
   'DASHBOARD':'대시보드','NEW DOCUMENT':'새 문서','MY DOCUMENTS':'내 문서','PENDING APPROVAL':'결재 대기','ALL DOCUMENTS':'전체 문서','USERS':'사용자 관리','SETTINGS':'설정',
-  'Overview':'개요','Create':'작성','My':'내 문서','Action Required':'조치 필요','Everything':'전체','Admin':'관리자',
+  'Overview':'개요','Create':'작성','My':'내','Action Required':'조치 필요','Everything':'전체','Admin':'관리자','Manager':'매니저','Staff':'직원',
   'Total':'전체','Pending':'대기','Approved':'승인','Rejected':'반려',
-  'Recent Documents':'최근 문서','Documents I Submitted':'내가 올린 문서','Documents Awaiting Your Approval':'내 결재 대기 문서',
-  'Doc No.':'문서번호','Title':'제목','Type':'종류','Requester':'기안자','Progress':'진행','Date':'날짜','Status':'상태','Action':'처리','Priority':'우선순위','My Step':'내 차례','Name':'이름','Email':'이메일','Role':'권한','Step':'단계',
-  '+ New Document':'+ 새 문서','+ New':'+ 새로','Submit for Approval →':'결재 상신 →','Save as Draft':'임시저장','✕ Cancel':'✕ 취소',
-  'No documents found.':'문서가 없습니다.','Loading...':'불러오는 중...'
+  'Recent Documents':'최근 문서','Documents I Submitted':'내가 올린 문서','Documents Awaiting Your Approval':'내 결재 대기 문서','Complete Document Log':'전체 문서 이력',
+  'Doc No.':'문서번호','Title':'제목','Type':'종류','Requester':'기안자','Progress':'진행','Date':'날짜','Status':'상태','Action':'처리','Priority':'우선순위','My Step':'내 차례','Name':'이름','Full Name':'이름','Email':'이메일','Email Address':'이메일 주소','Role':'권한','Step':'단계','History':'이력','Content':'내용','Content / Details':'내용 / 상세','Attachments':'첨부파일','Document Detail':'문서 상세','Approval Line':'결재라인','CC':'참조',
+  '+ New Document':'+ 새 문서','+ New':'+ 새로','Submit for Approval →':'결재 상신 →','Save as Draft':'임시저장','✕ Cancel':'✕ 취소','Save Changes →':'변경 저장 →','Save Template →':'템플릿 저장 →','Send Test Email':'테스트 메일 발송','Add User':'사용자 추가','Add User →':'사용자 추가 →','New Approval Line Template':'새 결재라인 템플릿','Approve':'승인','Approve Document':'문서 승인','Reject':'반려','Edit':'수정','Edit User':'사용자 수정','Delete':'삭제','Remove':'제거','Cancel':'취소','Close':'닫기','Archive':'보관','View':'보기','Resubmit':'재상신','Recall':'회수',
+  'No documents found.':'문서가 없습니다.','No attachments':'첨부파일 없음','No content':'내용 없음','No email':'이메일 없음','Loading...':'불러오는 중...',
+  'User ID':'아이디','Password':'비밀번호','Confirm Password':'비밀번호 확인','New Password':'새 비밀번호','LOGIN →':'로그인 →','Invalid ID or password.':'아이디 또는 비밀번호가 올바르지 않습니다.',
+  '🏠 HOME':'🏠 홈','LOGOUT':'로그아웃','Logout':'로그아웃'
 };
-var _KRPLACE = { 'Search...':'검색...','Enter document title':'문서 제목 입력' };
+var _KRPLACE = { 'Search...':'검색...','Enter document title':'문서 제목 입력','Describe the purpose and details...':'목적과 상세 내용을 입력하세요...' };
 function translateApprovalKR(root){
   root = root || document;
-  var sel = '.sidebar-section, .page-title-tag, .page-title, .stat-label, .table-title, th, .sidebar-item span, td.empty, .empty-state';
-  root.querySelectorAll(sel).forEach(function(el){ var k=(el.textContent||'').trim(); if(_KRDICT[k]!=null) el.textContent=_KRDICT[k]; });
-  root.querySelectorAll('button, .btn').forEach(function(b){ if(!b.children.length){ var k=(b.textContent||'').trim(); if(_KRDICT[k]!=null) b.textContent=_KRDICT[k]; } });
+  var sel = '.sidebar-section, .page-title-tag, .page-title, .stat-label, .table-title, th, .sidebar-item span, td.empty, .empty-state, .field-label, .topbar-logout, .hub-topbar-logout, .modal-title, .modal-header, .table-title';
+  root.querySelectorAll(sel).forEach(function(el){ if(el.children.length) return; var k=(el.textContent||'').trim(); if(_KRDICT[k]!=null) el.textContent=_KRDICT[k]; });
+  root.querySelectorAll('button, .btn, .btn-sm').forEach(function(b){ if(!b.children.length){ var k=(b.textContent||'').trim(); if(_KRDICT[k]!=null) b.textContent=_KRDICT[k]; } });
   root.querySelectorAll('input[placeholder]').forEach(function(i){ var k=(i.getAttribute('placeholder')||'').trim(); if(_KRPLACE[k]!=null) i.setAttribute('placeholder',_KRPLACE[k]); });
 }
 document.addEventListener('DOMContentLoaded', function(){
