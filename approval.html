@@ -804,6 +804,10 @@ const DOCS_COL = IS_KR ? 'documents_kr' : 'documents';   // KR 문서는 별도 
 const COUNTER_ID = IS_KR ? 'counter_kr' : 'counter';
 const DOCNO_PREFIX = IS_KR ? 'RSK-' : 'RSI-';
 const ASSET_BRANCH_Q = IS_KR ? '?branch=kr' : '';
+// 설정(결재라인 템플릿·카테고리·벤더)도 지점 분리 — KR은 별도 컬렉션
+const TEMPLATES_COL = IS_KR ? 'approval_templates_kr' : 'approval_templates';
+const CATWL_ID = IS_KR ? 'category_whitelist_kr' : 'category_whitelist';
+const VENDOR_ID = IS_KR ? 'vendor_list_kr' : 'vendor_list';
 function switchBranch(b){ try{ sessionStorage.setItem('rs_branch', String(b).toUpperCase()); }catch(e){} location.href = location.pathname + '?branch=' + b; }
 // 한국 모드: 전자결재 앱 화면(사이드바·대시보드·표 헤더·버튼)을 한글로 (US는 영문 유지)
 var _KRDICT = {
@@ -991,7 +995,7 @@ window.addEventListener('load', function() {
       showFirebaseError();
     });
 
-    db.collection('approval_templates').onSnapshot(snapshot => {
+    db.collection(TEMPLATES_COL).onSnapshot(snapshot => {
       templates = [];
       snapshot.forEach(d => templates.push({ id: d.id, ...d.data() }));
       templates.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -1005,7 +1009,7 @@ window.addEventListener('load', function() {
     });
 
     // 문서종류별 카테고리 화이트리스트 (Admin이 화면에서 편집) — 실시간 구독
-    db.collection('meta').doc('category_whitelist').onSnapshot(d => {
+    db.collection('meta').doc(CATWL_ID).onSnapshot(d => {
       if (d.exists && d.data()) {
         // 기본값을 베이스로 두고 저장된 값만 덮어씀 (새 kind 추가 시 누락 방지)
         categoryWhitelist = Object.assign(JSON.parse(JSON.stringify(CATEGORY_WHITELIST_DEFAULT)), d.data());
@@ -1017,7 +1021,7 @@ window.addEventListener('load', function() {
     });
 
     // 구매 벤더 목록 (Admin이 화면에서 편집) — 실시간 구독
-    db.collection('meta').doc('vendor_list').onSnapshot(d => {
+    db.collection('meta').doc(VENDOR_ID).onSnapshot(d => {
       if (d.exists && d.data() && Array.isArray(d.data().vendors)) {
         vendorList = d.data().vendors;
       } else {
@@ -1218,7 +1222,7 @@ async function sendEmail(toId, doc, action, comment) {
         action: action,
         comment: comment || '—',
         priority: doc.priority,
-        login_url: window.location.href.split('?')[0],
+        login_url: window.location.href.split('?')[0] + (IS_KR ? '?branch=kr' : ''),
         // Amazon 구매 요청 승인 알림에만 추가 — 메일에서 바로 결제 진행 가능 (일반 벤더는 제외)
         is_amazon_purchase: isAmazonDoc(doc),
         amazon_link: (doc.structuredData && doc.structuredData.link) || ''
@@ -1509,7 +1513,7 @@ function saveCategoryConfig() {
   if (!checked.length && !confirm('선택된 카테고리가 없습니다. 이 문서종류에는 카테고리가 표시되지 않습니다. 그래도 저장할까요?')) return;
   // 로컬 즉시 반영(스냅샷 도착 전에도 모달 재선택 시 일관)
   categoryWhitelist[kind] = checked;
-  db.collection('meta').doc('category_whitelist')
+  db.collection('meta').doc(CATWL_ID)
     .set({ [kind]: checked, updated_at: Date.now(), updated_by: currentUser.id }, { merge: true })
     .then(() => { closeModal('categoryConfigModal'); alert('✓ 저장되었습니다. 전 직원에게 즉시 반영됩니다.'); })
     .catch(e => alert('저장 오류: ' + e.message));
@@ -1555,7 +1559,7 @@ function saveVendorConfig() {
   if (new Set(names).size !== names.length) { alert('벤더명이 중복됩니다. 중복을 제거하세요.'); return; }
   if (!vendors.length && !confirm('벤더가 하나도 없습니다. 구매요청 폼에 사용처 목록이 비게 됩니다. 그래도 저장할까요?')) return;
   vendorList = vendors; // 로컬 즉시 반영
-  db.collection('meta').doc('vendor_list')
+  db.collection('meta').doc(VENDOR_ID)
     .set({ vendors, updated_at: Date.now(), updated_by: currentUser.id })
     .then(() => { closeModal('vendorConfigModal'); alert('✓ 저장되었습니다. 전 직원에게 즉시 반영됩니다.'); })
     .catch(e => alert('저장 오류: ' + e.message));
@@ -2711,13 +2715,13 @@ function saveTemplate() {
   };
 
   if (editingTemplateId) {
-    db.collection('approval_templates').doc(editingTemplateId).update(data)
+    db.collection(TEMPLATES_COL).doc(editingTemplateId).update(data)
       .then(() => { closeModal('templateModal'); alert('✓ 템플릿이 수정되었습니다.'); })
       .catch(e => alert('저장 오류: ' + e.message));
   } else {
     data.created_at = Date.now();
     data.created_by = currentUser.id;
-    db.collection('approval_templates').add(data)
+    db.collection(TEMPLATES_COL).add(data)
       .then(() => { closeModal('templateModal'); alert('✓ 새 템플릿이 등록되었습니다.'); })
       .catch(e => alert('등록 오류: ' + e.message));
   }
@@ -2727,7 +2731,7 @@ function deleteTemplate(id) {
   const t = templates.find(x => x.id === id);
   if (!t) return;
   if (!confirm(`"${t.name}" 템플릿을 삭제하시겠습니까?`)) return;
-  db.collection('approval_templates').doc(id).delete()
+  db.collection(TEMPLATES_COL).doc(id).delete()
     .then(() => alert('✓ 템플릿이 삭제되었습니다.'))
     .catch(e => alert('삭제 오류: ' + e.message));
 }
@@ -3239,7 +3243,7 @@ async function testEmail() {
         action: 'submitted',
         comment: '테스트 메일입니다 (Microsoft Graph 경유)',
         priority: 'Normal',
-        login_url: window.location.href.split('?')[0]
+        login_url: window.location.href.split('?')[0] + (IS_KR ? '?branch=kr' : '')
       })
     });
     if (!res.ok) {
