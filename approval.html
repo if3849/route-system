@@ -1059,7 +1059,7 @@ async function uploadFiles() {
   if (!files.length) { alert('파일을 선택해주세요.'); return; }
   for (const file of files) {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', file); formData.append('branch', BRANCH);
     try {
       const res = await fetch('https://routesystem-nas.tail66c283.ts.net/upload', { method: 'POST', body: formData });
       const data = await res.json();
@@ -1087,7 +1087,7 @@ async function uploadBlobAsFile(blob, suggestedName) {
   const name = suggestedName || `screenshot_${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.${ext}`;
   const file = new File([blob], name, { type: blob.type });
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', file); formData.append('branch', BRANCH);
   try {
     const res = await fetch('https://routesystem-nas.tail66c283.ts.net/upload', { method: 'POST', body: formData });
     const data = await res.json();
