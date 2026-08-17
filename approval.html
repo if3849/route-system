@@ -1425,6 +1425,7 @@ const CATEGORY_WHITELIST_DEFAULT = {
   payroll:          ['급여(프리)','급여(직원)','원재료','지급임차료'],
   recurring:        ['통신비','수도광열비(공과금)','보험료','세금과공과'],
   purchase_request: ['소모품비','비품(자산)','장비구매','복리후생비(생필품)','교육훈련비','운반비'],
+  card_settlement:  ['지급수수료','소모품비','비품(자산)','여비교통비','차량유지비','복리후생비(식비)','통신비','세금과공과'],
 };
 // 라이브 화이트리스트 — Firestore에서 로드되면 덮어씀. Admin이 화면에서 편집/저장.
 let categoryWhitelist = JSON.parse(JSON.stringify(CATEGORY_WHITELIST_DEFAULT));
@@ -1464,6 +1465,8 @@ const STRUCTURED_KINDS = [
   { kind: 'payroll',          label: '🧾 외주비·급여 지급 / Payroll' },
   { kind: 'recurring',        label: '🔁 정기지출 / Recurring' },
   { kind: 'purchase_request', label: '🛒 구매요청 / Purchase Request' },
+  // KR 전용: 법인카드 대금 월 일괄정산 (건별 sync 대신 월 1건만 자산 반영)
+  ...(IS_KR ? [{ kind: 'card_settlement', label: '💳 법인카드 월정산 / Card Settlement' }] : []),
 ];
 
 function categoryOptions(selected, kind) {
@@ -1587,6 +1590,7 @@ function showStructuredPanel(kind, data) {
   else if (kind === 'payroll') p.innerHTML = renderPayrollForm(data);
   else if (kind === 'recurring') p.innerHTML = renderRecurringForm(data);
   else if (kind === 'purchase_request') p.innerHTML = renderAmazonPurchaseForm(data);
+  else if (kind === 'card_settlement') p.innerHTML = renderCardSettlementForm(data);
   else { hideStructuredPanel(); return; }
   // payroll: 행 초기 렌더 (입력 중에는 절대 재호출 안 함 — IME 깨짐)
   if (kind === 'payroll') renderPayrollPayeeRows();
@@ -1606,7 +1610,8 @@ function hideStructuredPanel() {
 function renderCardExpenseForm(d) {
   return `
     <div style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:14px;margin-bottom:1rem;">
-      <div style="font-size:0.9rem;color:var(--primary);font-weight:600;margin-bottom:0.8rem;">💸 비용청구 / Expense (자산관리 자동 입력)</div>
+      <div style="font-size:0.9rem;color:var(--primary);font-weight:600;margin-bottom:0.8rem;">💸 비용청구 / Expense ${IS_KR?'':'(자산관리 자동 입력)'}</div>
+      ${IS_KR?`<div style="font-size:0.72rem;color:var(--text-dim);background:rgba(236,72,153,0.07);border-left:3px solid #ec4899;padding:8px 10px;border-radius:4px;margin-bottom:0.8rem;">💳 결제수단이 <strong>법인카드·아마존카드</strong>이면 이 건은 자산관리에 <strong>바로 반영되지 않고</strong>, 월말 <strong>「법인카드 월정산」</strong> 결재에서 한 번에 정산됩니다. <strong>법인통장</strong> 직접결제 건만 즉시 자산 반영됩니다.</div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div><label class="field-label">사용일자 *</label><input class="field-input" type="date" id="se_date" value="${d.date||''}" oninput="renderStructuredContent()"/></div>
         <div><label class="field-label">금액 (${CUR_CODE}) *</label><input class="field-input" type="text" inputmode="decimal" id="se_amount" value="${d.amount?fmtAmt(d.amount):''}" oninput="formatNumberInput(this,${CUR_DEC});renderStructuredContent()" placeholder="${CUR_PH}"/></div>
@@ -1745,6 +1750,35 @@ function renderRecurringForm(d) {
           <textarea class="field-input-white" id="re_note" oninput="renderStructuredContent()" style="min-height:60px;">${d.note||''}</textarea>
         </div>
       </div>
+    </div>
+    <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input" id="docContent" readonly style="min-height:140px;background:rgba(99,102,241,0.05);border-style:dashed;font-family:monospace;white-space:pre-wrap;"></textarea></div>
+  `;
+}
+
+// ── 법인카드 월정산 (KR 전용) — 한 달 카드 대금 일괄정산. 자산관리엔 이 1건만 반영. ──
+function renderCardSettlementForm(d) {
+  const cardOpts = ['법인카드','아마존카드'].map(c => `<option value="${c}"${(d.card||'법인카드')===c?' selected':''}>${c}</option>`).join('');
+  return `
+    <div style="background:rgba(236,72,153,0.05);border:1px solid rgba(236,72,153,0.22);border-radius:10px;padding:14px;margin-bottom:1rem;">
+      <div style="font-size:0.9rem;color:#ec4899;font-weight:700;margin-bottom:0.3rem;">💳 법인카드 월정산 / Card Settlement</div>
+      <div style="font-size:0.72rem;color:var(--text-dim);background:rgba(236,72,153,0.08);border-left:3px solid #ec4899;padding:8px 10px;border-radius:4px;margin-bottom:0.8rem;">💡 한 달치 법인카드 대금을 <strong>한 번에</strong> 정산하는 결재입니다. 카드사 <strong>명세서(사용 내역)는 파일로 첨부</strong>하고, 자산관리에는 이 <strong>월 대금 1건만</strong> 반영됩니다. (개별 카드 사용 결재는 자산에 안 쌓입니다.)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+        <div><label class="field-label">정산월 *</label><input class="field-input" type="month" id="cs_billingMonth" value="${d.billingMonth||''}" oninput="renderStructuredContent()"/></div>
+        <div><label class="field-label">카드 *</label><select class="field-input" id="cs_card" onchange="renderStructuredContent()">${cardOpts}</select></div>
+        <div><label class="field-label">출금일 (실제 결제일) *</label><input class="field-input" type="date" id="cs_payDate" value="${d.payDate||''}" oninput="renderStructuredContent()"/></div>
+        <div><label class="field-label">총 결제금액 (KRW) *</label><input class="field-input" type="text" inputmode="numeric" id="cs_amount" value="${d.amount?fmtKRW(d.amount):''}" oninput="formatNumberInput(this,0);renderStructuredContent()" placeholder="0"/></div>
+        <div><label class="field-label">카테고리 *</label><select class="field-input" id="cs_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'card_settlement')}</select></div>
+        <div><label class="field-label">결제계좌 *</label><select class="field-input" id="cs_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'법인통장')}</select></div>
+        <div style="grid-column:1/3;"><label class="field-label">프로젝트 *</label><select class="field-input" id="cs_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
+        <div style="grid-column:1/3;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+            <label class="field-label" style="margin-bottom:0;">비고 / 내역 요약</label>
+            <button type="button" class="btn-expand-trigger" onclick="openExpandEditor('cs_note')">⛶ 확대 편집 / Expand</button>
+          </div>
+          <textarea class="field-input-white" id="cs_note" oninput="renderStructuredContent()" style="min-height:60px;" placeholder="예: 주요 사용처 요약 / 특이사항 (상세 내역은 명세서 첨부)">${d.note||''}</textarea>
+        </div>
+      </div>
+      <div style="font-size:0.72rem;color:#fbbf24;background:rgba(251,191,36,0.08);border-left:3px solid #fbbf24;padding:8px 10px;border-radius:4px;margin-top:0.7rem;">⚠️ 승인 시 자산관리에 <strong>매입 1건</strong>(출금일·총 결제금액·결제계좌)으로 자동 입력됩니다. 카드사 명세서를 <strong>첨부</strong>하는 것을 잊지 마세요.</div>
     </div>
     <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input" id="docContent" readonly style="min-height:140px;background:rgba(99,102,241,0.05);border-style:dashed;font-family:monospace;white-space:pre-wrap;"></textarea></div>
   `;
@@ -1909,6 +1943,24 @@ ${link ? '링크: ' + link + '\n' : ''}카테고리: ${cat}
 ${purpose || ''}
 
 ${footer}`;
+  } else if (kind === 'card_settlement') {
+    const month = v('cs_billingMonth'), card = v('cs_card'), payDate = v('cs_payDate'),
+          amount = v('cs_amount'), cat = v('cs_category'), acct = v('cs_paymentMethod'),
+          proj = v('cs_project'), note = v('cs_note');
+    txt = `${month} 법인카드(${card}) 대금 정산의 건으로 상신드립니다.
+
+1. 정산월: ${month}
+2. 카드: ${card}
+3. 출금일(실제 결제일): ${payDate}
+4. 결제계좌: ${acct}
+5. 카테고리: ${cat}
+6. 프로젝트: ${proj}
+7. 총 결제금액: ${fmtCUR(amount)}
+
+[비고]
+${note || ''}
+
+* 카드사 사용 명세서를 첨부하였습니다. 자산관리에는 위 총 결제금액 1건으로 반영됩니다.`;
   }
   const dc = document.getElementById('docContent');
   if (dc) dc.value = txt;
@@ -1978,6 +2030,11 @@ function collectStructuredData() {
              amount:parseFormattedNumber(v('ap_amount')), purpose:v('ap_purpose'),
              paymentMethod:v('ap_paymentMethod') };
   }
+  if (kind === 'card_settlement') {
+    return { kind, billingMonth:v('cs_billingMonth'), card:v('cs_card'), payDate:v('cs_payDate'),
+             amount:parseFormattedNumber(v('cs_amount')), category:v('cs_category'),
+             project:v('cs_project'), note:v('cs_note'), paymentMethod:v('cs_paymentMethod')||'법인통장' };
+  }
   return null;
 }
 
@@ -1993,6 +2050,8 @@ function validateStructured() {
     if (!d.billingMonth || !d.vendor || !d.category || !d.project || !d.amount) return '모든 필수 필드를 입력하세요.';
   } else if (d.kind === 'purchase_request') {
     if (!d.vendor || !d.item || !d.category || !d.project || !d.amount || !d.purpose) return '필수 항목(사용처 / Title=품목명 / 카테고리 / 프로젝트 / 금액 / 사용목적)을 입력하세요.';
+  } else if (d.kind === 'card_settlement') {
+    if (!d.billingMonth || !d.card || !d.payDate || !d.category || !d.project || !d.amount) return '필수 항목(정산월/카드/출금일/카테고리/프로젝트/총 결제금액)을 입력하세요.';
   }
   // 결제수단 필수 — 모든 정형 양식 공통
   if (!d.paymentMethod || d.paymentMethod === '미분류') return '결제수단(Payment Method)을 선택해 주세요.';
@@ -3030,7 +3089,13 @@ async function doApprove(action) {
 
   // ★ 최종 승인 & 정형 데이터 있음 → 자산관리 자동 sync
   let syncMsg = '';
-  if (doc.status === 'approved' && doc.structuredData && doc.structuredData.kind && !doc.assetTxId) {
+  if (doc.status === 'approved' && doc.structuredData && doc.structuredData.kind && !doc.assetTxId
+      && shouldSkipAssetSync(doc)) {
+    // KR: 법인/아마존카드로 결제한 비용청구는 건별 자산 반영 안 함 (월정산으로 일괄) — 승인/기록은 유지
+    doc.syncStatus = 'skipped_card';
+    await saveDoc(doc); saveData();
+    syncMsg = '\n💳 법인카드 사용건 — 자산 미반영 (월정산 결재로 일괄 처리됩니다)';
+  } else if (doc.status === 'approved' && doc.structuredData && doc.structuredData.kind && !doc.assetTxId) {
     const syncResult = await syncDocToAssetManager(doc);
     if (syncResult.ok) {
       doc.assetTxId = syncResult.tx_id;
@@ -3051,6 +3116,14 @@ async function doApprove(action) {
   else alert('✕ Document rejected.');
 }
 
+// ── 자산 sync 제외 판정 — KR 법인/아마존카드 결제 비용청구는 월정산으로 일괄 처리 ──
+function shouldSkipAssetSync(doc) {
+  if (!IS_KR) return false;
+  const sd = doc.structuredData || {};
+  if (sd.kind !== 'card_expense') return false;
+  return ['법인카드','아마존카드'].includes(sd.paymentMethod);
+}
+
 // ── 자산관리 자동 입력 (최종 승인 시 호출) ──
 async function syncDocToAssetManager(doc) {
   const sd = doc.structuredData || {};
@@ -3058,7 +3131,7 @@ async function syncDocToAssetManager(doc) {
   if (!kind) return { ok:false, error:'no structured data' };
 
   const prDefaultPM = isAmazonVendor(sd.vendor) ? '아마존카드' : '법인카드';
-  const defaultPM = { card_expense:'법인카드', payroll:'법인통장', recurring:'법인통장', purchase_request:prDefaultPM }[kind] || '미분류';
+  const defaultPM = { card_expense:'법인카드', payroll:'법인통장', recurring:'법인통장', purchase_request:prDefaultPM, card_settlement:'법인통장' }[kind] || '미분류';
   let payload = { source_doc_no: doc.docNo, attachments: doc.attachments || [], type:'매입',
                   payment_method: sd.paymentMethod || defaultPM };
   if (kind === 'card_expense') {
@@ -3105,6 +3178,14 @@ async function syncDocToAssetManager(doc) {
     payload.amount = sd.amount;
     payload.note = doc.content || '';
     payload.po_no = doc.docNo;
+  } else if (kind === 'card_settlement') {
+    // 법인카드 월정산: 실제 출금일을 거래일로, vendor=카드명, 결제계좌=payment_method, 총 대금 1건
+    payload.date = sd.payDate;
+    payload.vendor = sd.card || '법인카드';
+    payload.category = sd.category;
+    payload.project = sd.project;
+    payload.amount = sd.amount;
+    payload.note = doc.content || '';
   }
   try {
     const r = await fetch(ASSET_API_BASE + '/sync-asset-manager', {
