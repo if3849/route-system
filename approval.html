@@ -808,6 +808,12 @@ const ASSET_BRANCH_Q = IS_KR ? '?branch=kr' : '';
 const TEMPLATES_COL = IS_KR ? 'approval_templates_kr' : 'approval_templates';
 const CATWL_ID = IS_KR ? 'category_whitelist_kr' : 'category_whitelist';
 const VENDOR_ID = IS_KR ? 'vendor_list_kr' : 'vendor_list';
+// 통화: KR은 원화(₩, 소수점 없음) / US는 달러($, 소수점 2자리). 정형양식 금액표기·환율변환 분기용.
+const CUR_CODE = IS_KR ? 'KRW' : 'USD';
+const CUR_DEC  = IS_KR ? 0 : 2;
+const CUR_PH   = IS_KR ? '0' : '0.00';
+function fmtCUR(n){ return IS_KR ? '₩ ' + fmtKRW(n) : '$ ' + fmtNum(n); }
+function fmtAmt(n){ return IS_KR ? fmtKRW(n) : fmtNum(n); }
 function switchBranch(b){ try{ sessionStorage.setItem('rs_branch', String(b).toUpperCase()); }catch(e){} location.href = location.pathname + '?branch=' + b; }
 // 한국 모드: 전자결재 앱 화면(사이드바·대시보드·표 헤더·버튼)을 한글로 (US는 영문 유지)
 var _KRDICT = {
@@ -1603,7 +1609,7 @@ function renderCardExpenseForm(d) {
       <div style="font-size:0.9rem;color:var(--primary);font-weight:600;margin-bottom:0.8rem;">💸 비용청구 / Expense (자산관리 자동 입력)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div><label class="field-label">사용일자 *</label><input class="field-input" type="date" id="se_date" value="${d.date||''}" oninput="renderStructuredContent()"/></div>
-        <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="text" inputmode="decimal" id="se_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
+        <div><label class="field-label">금액 (${CUR_CODE}) *</label><input class="field-input" type="text" inputmode="decimal" id="se_amount" value="${d.amount?fmtAmt(d.amount):''}" oninput="formatNumberInput(this,${CUR_DEC});renderStructuredContent()" placeholder="${CUR_PH}"/></div>
         <div><label class="field-label">사용처 / Vendor *</label><input class="field-input" type="text" id="se_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="Amazon, Home Depot, Chevron 등"/></div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="se_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'card_expense')}</select></div>
         <div><label class="field-label">결제수단 *</label><select class="field-input" id="se_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'')}</select></div>
@@ -1624,11 +1630,10 @@ function renderCardExpenseForm(d) {
 // ── 외주비/급여 ──
 function renderPayrollForm(d) {
   payrollPayees = (d.payees && d.payees.length) ? [...d.payees] : [{name:'',amount:'',note:''}];
-  const currency = d.currency || 'KRW';
-  return `
-    <div style="background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:14px;margin-bottom:1rem;">
-      <div style="font-size:0.9rem;color:var(--secondary);font-weight:600;margin-bottom:0.8rem;">💼 외주비/급여 지급요청 (자산관리 자동 입력)</div>
-      <!-- 통화 토글 -->
+  // KR은 원화 직접 지급(환율변환 없음) → 통화 KRW 고정. US는 KRW(환율변환)/USD(직접) 토글.
+  const currency = IS_KR ? 'KRW' : (d.currency || 'KRW');
+  const toggleHtml = IS_KR ? `<input type="hidden" name="pr_currency" value="KRW"/>` : `
+      <!-- 통화 토글 (US 전용) -->
       <div style="margin-bottom:0.9rem;padding:10px 14px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.18);border-radius:6px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
         <span style="font-size:0.78rem;color:var(--text-dim);font-weight:700;letter-spacing:1px;">지급 통화</span>
         <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
@@ -1639,7 +1644,11 @@ function renderPayrollForm(d) {
           <input type="radio" name="pr_currency" value="USD" ${currency==='USD'?'checked':''} onchange="changePayrollCurrency('USD')"/>
           <span>🇺🇸 USD (직접 입력)</span>
         </label>
-      </div>
+      </div>`;
+  return `
+    <div style="background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:14px;margin-bottom:1rem;">
+      <div style="font-size:0.9rem;color:var(--secondary);font-weight:600;margin-bottom:0.8rem;">💼 외주비/급여 지급요청 (자산관리 자동 입력)</div>
+      ${toggleHtml}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div><label class="field-label">산정기간 시작 *</label><input class="field-input" type="date" id="pr_startDate" value="${d.startDate||''}" oninput="renderStructuredContent()"/></div>
         <div><label class="field-label">산정기간 종료 *</label><input class="field-input" type="date" id="pr_endDate" value="${d.endDate||''}" oninput="renderStructuredContent()"/></div>
@@ -1653,6 +1662,12 @@ function renderPayrollForm(d) {
           <button type="button" class="btn btn-outline" style="margin-top:0.4rem;" onclick="addPayrollPayee()">+ 행 추가</button>
         </div>
       </div>
+      ${IS_KR ? `
+      <!-- KR: 환율변환 없이 총액 KRW만 -->
+      <div style="margin-top:0.7rem;display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+        <div><label class="field-label">총액 KRW (자동)</label><input class="field-input" type="text" id="pr_totalKRW" readonly style="background:rgba(255,255,255,0.03);"/></div>
+        <div></div>
+      </div>` : `
       <!-- 환율 블록 — KRW일 때만 -->
       <div id="pr_rateGroup" style="margin-top:0.7rem;display:${currency==='KRW'?'grid':'none'};grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div><label class="field-label">환율 (KRW/USD) *</label><input class="field-input" type="text" inputmode="decimal" id="pr_rate" value="${d.rate?fmtNum(d.rate):''}" oninput="formatNumberInput(this,4);renderStructuredContent()" placeholder="1,475.53"/></div>
@@ -1663,7 +1678,7 @@ function renderPayrollForm(d) {
       <div style="margin-top:0.7rem;display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div><label class="field-label">총액 USD (자동)</label><input class="field-input" type="text" id="pr_totalUSD" readonly style="background:rgba(255,255,255,0.03);"/></div>
         <div></div>
-      </div>
+      </div>`}
     </div>
     <div class="form-group"><label class="field-label">📄 결재 본문 미리보기 (자동 생성)</label><textarea class="field-input" id="docContent" readonly style="min-height:180px;background:rgba(99,102,241,0.05);border-style:dashed;font-family:monospace;white-space:pre-wrap;"></textarea></div>
   `;
@@ -1717,7 +1732,7 @@ function renderRecurringForm(d) {
       <div style="font-size:0.9rem;color:var(--success);font-weight:600;margin-bottom:0.8rem;">📅 정기 지출 / Recurring Expense (자산관리 자동 입력)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div><label class="field-label">청구월 *</label><input class="field-input" type="month" id="re_billingMonth" value="${d.billingMonth||''}" oninput="renderStructuredContent()"/></div>
-        <div><label class="field-label">금액 (USD) *</label><input class="field-input" type="text" inputmode="decimal" id="re_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
+        <div><label class="field-label">금액 (${CUR_CODE}) *</label><input class="field-input" type="text" inputmode="decimal" id="re_amount" value="${d.amount?fmtAmt(d.amount):''}" oninput="formatNumberInput(this,${CUR_DEC});renderStructuredContent()" placeholder="${CUR_PH}"/></div>
         <div><label class="field-label">업체 / Vendor *</label><input class="field-input" type="text" id="re_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="임대료/보험사/통신사 등"/></div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="re_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'recurring')}</select></div>
         <div><label class="field-label">결제수단 *</label><select class="field-input" id="re_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'')}</select></div>
@@ -1764,7 +1779,7 @@ function renderAmazonPurchaseForm(d) {
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="ap_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'purchase_request')}</select></div>
         <div><label class="field-label">프로젝트 *</label><select class="field-input" id="ap_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
         <div><label class="field-label">수량</label><input class="field-input" type="number" min="1" step="1" id="ap_qty" value="${d.qty||1}" oninput="renderStructuredContent()"/></div>
-        <div><label class="field-label">금액 USD (Tax 포함 최종 금액) *</label><input class="field-input" type="text" inputmode="decimal" id="ap_amount" value="${d.amount?fmtNum(d.amount):''}" oninput="formatNumberInput(this,2);renderStructuredContent()" placeholder="0.00"/></div>
+        <div><label class="field-label">금액 ${CUR_CODE} (Tax 포함 최종 금액) *</label><input class="field-input" type="text" inputmode="decimal" id="ap_amount" value="${d.amount?fmtAmt(d.amount):''}" oninput="formatNumberInput(this,${CUR_DEC});renderStructuredContent()" placeholder="${CUR_PH}"/></div>
         <div style="grid-column:1/3;"><label class="field-label">결제수단 *</label><select class="field-input" id="ap_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'')}</select></div>
         <div id="ap_amount_warn" style="grid-column:1/3;font-size:0.72rem;color:#fbbf24;background:rgba(251,191,36,0.08);border-left:3px solid #fbbf24;padding:8px 10px;border-radius:4px;">⚠️ <strong>금액은 Tax·Shipping 포함 최종 결제금액</strong>을 입력하세요. <span id="ap_amount_warn_amz" style="display:${isAmz?'':'none'};">장바구니 "Proceed to Checkout" → Place Order 직전 Total 금액을 입력 (주문은 승인 후 진행).</span></div>
         <div style="grid-column:1/3;">
@@ -1808,7 +1823,7 @@ function renderStructuredContent() {
 사용처: ${vendor}
 카테고리: ${cat}
 프로젝트: ${proj}
-금액: $ ${fmtNum(amount)}
+금액: ${fmtCUR(amount)}
 
 [사용 목적]
 ${purpose || ''}`;
@@ -1835,8 +1850,8 @@ ${purpose || ''}`;
 3. 프로젝트: ${proj}
 4. 지급정보:
 ${payeeLines}
-5. 총지급액: ${fmtKRW(totalKRW)}원
-            = $ ${fmtNum(totalUSD)} (${rateDesc} ${fmtKRW(rate)}원 적용)
+5. 총지급액: ${fmtKRW(totalKRW)}원${IS_KR ? '' : `
+            = $ ${fmtNum(totalUSD)} (${rateDesc} ${fmtKRW(rate)}원 적용)`}
 
 이상입니다.`;
     } else {
@@ -1866,7 +1881,7 @@ ${payeeLines}
 업체: ${vendor}
 카테고리: ${cat}
 프로젝트: ${proj}
-금액: $ ${fmtNum(amount)}
+금액: ${fmtCUR(amount)}
 
 [비고]
 ${note || ''}`;
@@ -1888,7 +1903,7 @@ PO No: ${poDisplay}
 ${link ? '링크: ' + link + '\n' : ''}카테고리: ${cat}
 프로젝트: ${proj}
 수량: ${qty}
-금액: $ ${fmtNum(amount)}
+금액: ${fmtCUR(amount)}
 
 [사용 목적]
 ${purpose || ''}
@@ -1972,7 +1987,7 @@ function validateStructured() {
     if (!d.date || !d.vendor || !d.category || !d.project || !d.amount || !d.purpose) return '모든 필드(사용일자/사용처/카테고리/프로젝트/금액/사용목적)를 입력하세요.';
   } else if (d.kind === 'payroll') {
     if (!d.startDate || !d.endDate || !d.vendor || !d.category || !d.project) return '필수 항목(기간/업체/카테고리/프로젝트)을 입력하세요.';
-    if (d.currency === 'KRW' && !d.rate) return '환율을 입력하세요 (KRW 모드).';
+    if (!IS_KR && d.currency === 'KRW' && !d.rate) return '환율을 입력하세요 (KRW 모드).';
     if (!d.payees.length || d.payees.some(p=>!p.name||!p.amount)) return '지급명세 행에 이름과 금액을 모두 입력하세요.';
   } else if (d.kind === 'recurring') {
     if (!d.billingMonth || !d.vendor || !d.category || !d.project || !d.amount) return '모든 필수 필드를 입력하세요.';
@@ -2321,14 +2336,14 @@ async function updateActualAmount(docId) {
   const sd = doc.structuredData || {};
   const currentAmount = parseFloat(sd.amount) || 0;
   const input = prompt(
-    `실제 결제액(Tax 포함 최종 금액)을 입력하세요.\n\n현재 금액: $ ${fmtNum(currentAmount)}\n\n새 금액 (USD, 콤마 가능):`,
-    fmtNum(currentAmount)
+    `실제 결제액(Tax 포함 최종 금액)을 입력하세요.\n\n현재 금액: ${fmtCUR(currentAmount)}\n\n새 금액 (${CUR_CODE}, 콤마 가능):`,
+    fmtAmt(currentAmount)
   );
   if (input === null) return;
   const newAmount = parseFormattedNumber(input);
   if (newAmount <= 0) { alert('유효한 금액이 아닙니다.'); return; }
   if (Math.abs(newAmount - currentAmount) < 0.005) { alert('금액 변동 없음.'); return; }
-  if (!confirm(`결제액을 변경합니다.\n$ ${fmtNum(currentAmount)}  →  $ ${fmtNum(newAmount)}\n\n자산관리도 자동 갱신됩니다. 진행할까요?`)) return;
+  if (!confirm(`결제액을 변경합니다.\n${fmtCUR(currentAmount)}  →  ${fmtCUR(newAmount)}\n\n자산관리도 자동 갱신됩니다. 진행할까요?`)) return;
 
   try {
     const r = await fetch(ASSET_API_BASE + '/update-asset-amount', {
@@ -2347,17 +2362,19 @@ async function updateActualAmount(docId) {
     const newHistory = [
       ...(doc.history || []),
       { action: 'amount_updated', by: currentUser.id, at: Date.now(),
-        comment: `결제액 갱신: $${fmtNum(currentAmount)} → $${fmtNum(newAmount)}` }
+        comment: `결제액 갱신: ${fmtCUR(currentAmount)} → ${fmtCUR(newAmount)}` }
     ];
     let newContent = doc.content || '';
-    // "금액: $ 123.45" 또는 "금액: $ 1,234.56" 패턴 치환
-    newContent = newContent.replace(/(금액:\s*\$\s*)[\d,]+\.?\d*/, `$1${fmtNum(newAmount)}`);
+    // 본문 "금액: ₩ 1,234" (KR) / "금액: $ 123.45" (US) 라인 치환
+    newContent = IS_KR
+      ? newContent.replace(/(금액:\s*₩\s*)[\d,]+\.?\d*/, `$1${fmtAmt(newAmount)}`)
+      : newContent.replace(/(금액:\s*\$\s*)[\d,]+\.?\d*/, `$1${fmtAmt(newAmount)}`);
     // 갱신 메모 추가
     const ts = new Date().toLocaleString('ko-KR');
-    newContent += `\n\n[결제액 갱신 ${ts}] $${fmtNum(currentAmount)} → $${fmtNum(newAmount)}`;
+    newContent += `\n\n[결제액 갱신 ${ts}] ${fmtCUR(currentAmount)} → ${fmtCUR(newAmount)}`;
     const updatedDoc = { ...doc, structuredData: newSD, history: newHistory, content: newContent };
     await saveDoc(updatedDoc);
-    alert(`✓ 결제액 갱신 완료.\n자산관리도 동기화됐습니다.\n새 금액: $ ${fmtNum(newAmount)}`);
+    alert(`✓ 결제액 갱신 완료.\n자산관리도 동기화됐습니다.\n새 금액: ${fmtCUR(newAmount)}`);
   } catch(e) {
     alert('갱신 오류: ' + (e.message || e));
   }
@@ -3060,7 +3077,7 @@ async function syncDocToAssetManager(doc) {
     payload.vendor = sd.vendor;
     payload.category = sd.category;
     payload.project = sd.project;
-    payload.amount = sd.totalUSD;
+    payload.amount = IS_KR ? (sd.totalKRW || 0) : sd.totalUSD;   // KR은 원화 총액, US는 USD 환산액
     payload.note = doc.content || '';
   } else if (kind === 'recurring') {
     // 청구월 'YYYY-MM' → 해당 월 말일
