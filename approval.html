@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>Route System Inc. — Approval System</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet"/>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <!-- xlsx(약 900KB)는 엑셀 내보내기 때만 지연 로딩 → 로그인 화면이 즉시 뜸 (loadXLSX 참고) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -786,7 +786,18 @@ document.addEventListener('keydown', function(e){
 let users = [];
 let usersLoaded = false;
 let docs = [];
+let docsLoaded = false;   // 첫 documents 스냅샷 도착 여부 (로딩중 vs 진짜 0건 구분)
 let currentUser = null;
+// 조건이 참이 될 때까지(또는 타임아웃) 대기 — 로그인이 데이터 로딩을 앞질러 신원/역할이 잘못 잡히는 레이스 방지
+function waitUntil(cond, timeoutMs = 6000, stepMs = 100) {
+  return new Promise(resolve => {
+    if (cond()) return resolve(true);
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      if (cond() || Date.now() - t0 >= timeoutMs) { clearInterval(iv); resolve(cond()); }
+    }, stepMs);
+  });
+}
 let currentDocId = null;
 let docCounter = 0;
 let db = null;
@@ -989,6 +1000,7 @@ window.addEventListener('load', function() {
       docs = [];
       snapshot.forEach(d => docs.push(d.data()));
       docs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      docsLoaded = true;
       if (currentUser) {
         refreshAll();
         ['mine','pending','all','dashboard'].forEach(p => {
@@ -1259,6 +1271,8 @@ async function doLogin() {
   if (email.includes('@')) email = email.toLowerCase();
   try {
     const cred = await firebase.auth().signInWithEmailAndPassword(email, pw);
+    // 사용자 목록이 아직 안 왔으면 잠깐 기다려 신원/역할을 정확히 확정 (레이스로 Admin이 Staff로 잡히는 문제 방지)
+    if (!usersLoaded) await waitUntil(() => usersLoaded, 6000);
     let user = usersLoaded
       ? users.find(u => (u.email && u.email.toLowerCase() === email.toLowerCase()) || u.firebase_uid === cred.user.uid)
       : null;
@@ -2316,7 +2330,7 @@ function getUserName(id) { const u = users.find(u => sameId(u.id, id)); return u
 
 function renderTable(tbodyId, data, mode) {
   const tb = document.getElementById(tbodyId); if (!tb) return;
-  if (!data.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="9">No documents found.</td></tr>'; return; }
+  if (!data.length) { tb.innerHTML = `<tr class="empty-row"><td colspan="9">${docsLoaded ? 'No documents found.' : 'Loading...'}</td></tr>`; return; }
   tb.innerHTML = [...data].sort((a,b) => b.createdAt - a.createdAt).map(doc => {
     const actions = buildActions(doc, mode);
     const prog = progressHtml(doc);
@@ -3359,8 +3373,23 @@ async function testEmail() {
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
 // ── EXCEL EXPORT ──
-function exportToExcel() {
+// xlsx 지연 로딩 — 최초 호출 때만 CDN에서 받아옴 (이후 캐시). 로그인/초기로딩을 막지 않기 위함.
+let _xlsxPromise = null;
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve();
+  if (_xlsxPromise) return _xlsxPromise;
+  _xlsxPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+    s.onload = () => resolve();
+    s.onerror = () => { _xlsxPromise = null; reject(new Error('xlsx load failed')); };
+    document.head.appendChild(s);
+  });
+  return _xlsxPromise;
+}
+async function exportToExcel() {
   if (!docs.length) { alert('내보낼 문서가 없습니다.'); return; }
+  try { await loadXLSX(); } catch(e) { alert('엑셀 모듈 로딩 실패 (네트워크 확인). 잠시 후 다시 시도해 주세요.'); return; }
   const data = docs.map(d => {
     const requester = users.find(u => sameId(u.id, d.requesterId));
     const approverNames = (d.approvers||[]).map((a, i) => {
