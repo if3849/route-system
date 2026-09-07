@@ -150,16 +150,18 @@
     .page-title-tag { font-family:'Barlow Condensed',sans-serif; font-size:0.7rem; letter-spacing:3px; text-transform:uppercase; color:var(--accent); margin-bottom:0.3rem; }
     .page-title { font-family:'Bebas Neue',sans-serif; font-size:2.2rem; letter-spacing:2px; }
 
-    .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--dark3); margin-bottom:2rem; }
+    .stats-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:1px; background:var(--dark3); margin-bottom:2rem; }
     .stat-card { background:var(--dark); padding:1.5rem; position:relative; }
     .stat-card::before { content:''; position:absolute; top:0; left:0; width:3px; height:100%; }
     .stat-card.gold::before { background:var(--accent); }
     .stat-card.green::before { background:var(--green); }
     .stat-card.red::before { background:var(--red); }
+    .stat-card.orange::before { background:#ff9900; }
     .stat-num { font-family:'Bebas Neue',sans-serif; font-size:2.5rem; line-height:1; margin-bottom:0.3rem; }
     .stat-card.gold .stat-num { color:var(--accent); }
     .stat-card.green .stat-num { color:var(--green); }
     .stat-card.red .stat-num { color:var(--red); }
+    .stat-card.orange .stat-num { color:#ff9900; }
     .stat-label { font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; color:var(--mid); }
 
     .table-wrap { background:var(--dark); border:1px solid var(--dark3); }
@@ -177,6 +179,7 @@
     .status-approved { background:rgba(74,158,107,0.15); color:var(--green); border:1px solid rgba(74,158,107,0.3); }
     .status-rejected { background:rgba(192,57,43,0.15); color:#e74c3c; border:1px solid rgba(192,57,43,0.3); }
     .status-draft { background:rgba(136,136,136,0.15); color:var(--mid); border:1px solid rgba(136,136,136,0.3); }
+    .status-info_requested { background:rgba(255,153,0,0.15); color:#ff9900; border:1px solid rgba(255,153,0,0.35); }
     .btn-sm { font-family:'Barlow Condensed',sans-serif; font-size:0.7rem; letter-spacing:1px; text-transform:uppercase; border:none; padding:5px 12px; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
     .btn-sm-accent { background:var(--accent); color:var(--black); }
     .btn-sm-accent:hover { background:var(--accent2); }
@@ -207,6 +210,18 @@
     .h-pending { background:var(--accent); } .h-approved { background:var(--green); }
     .h-rejected { background:var(--red); } .h-draft { background:var(--mid); }
     .h-resubmitted { background:var(--blue); }
+    .h-info_requested { background:#ff9900; } .h-info_answered { background:var(--blue); }
+    .cmt-wrap { margin-top:1.5rem; }
+    .cmt-item { padding:0.7rem 0.9rem; border:1px solid var(--dark3); border-left:3px solid var(--gray); background:#0f0f0f; margin-bottom:0.6rem; }
+    .cmt-item.q { border-left-color:#ff9900; }
+    .cmt-item.a { border-left-color:var(--blue); }
+    .cmt-head { display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin-bottom:0.35rem; }
+    .cmt-who { font-size:0.8rem; color:var(--accent); font-weight:600; }
+    .cmt-tag { font-family:'Barlow Condensed',sans-serif; font-size:0.62rem; letter-spacing:1px; text-transform:uppercase; padding:1px 7px; border:1px solid var(--gray); color:var(--mid); }
+    .cmt-tag.q { color:#ff9900; border-color:rgba(255,153,0,0.5); }
+    .cmt-tag.a { color:var(--blue); border-color:var(--blue); }
+    .cmt-time { font-size:0.72rem; color:var(--mid); margin-left:auto; }
+    .cmt-body { font-size:0.86rem; color:var(--light); line-height:1.6; white-space:pre-wrap; }
     .history-text { font-size:0.85rem; color:var(--light); line-height:1.6; }
     .history-time { font-size:0.75rem; color:var(--mid); }
 
@@ -388,7 +403,7 @@
     <div class="sidebar-item active" onclick="showPage('dashboard')" id="nav-dashboard">📊 <span>Dashboard</span></div>
     <div class="sidebar-item" onclick="showPage('new')" id="nav-new">✏️ <span>New Document</span></div>
     <div class="sidebar-section">Documents</div>
-    <div class="sidebar-item" onclick="showPage('mine')" id="nav-mine">📄 <span>My Documents</span></div>
+    <div class="sidebar-item" onclick="showPage('mine')" id="nav-mine">📄 <span>My Documents</span><span class="badge" id="mineBadge" style="display:none;background:#ff9900">0</span></div>
     <div class="sidebar-item" onclick="showPage('pending')" id="nav-pending">⏳ <span>Pending Approval</span><span class="badge" id="pendingBadge" style="display:none">0</span></div>
     <div class="sidebar-item" onclick="showPage('all')" id="nav-all">🗂️ <span>All Documents</span></div>
     <div class="sidebar-section">System</div>
@@ -406,6 +421,7 @@
       <div class="stats-grid">
         <div class="stat-card gold"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Total</div></div>
         <div class="stat-card gold"><div class="stat-num" id="stat-pending" style="color:var(--accent)">0</div><div class="stat-label">Pending</div></div>
+        <div class="stat-card orange"><div class="stat-num" id="stat-info">0</div><div class="stat-label">Info Req</div></div>
         <div class="stat-card green"><div class="stat-num" id="stat-approved">0</div><div class="stat-label">Approved</div></div>
         <div class="stat-card red"><div class="stat-num" id="stat-rejected">0</div><div class="stat-label">Rejected</div></div>
       </div>
@@ -832,18 +848,19 @@ var _KRDICT = {
   'Dashboard':'대시보드','New Document':'새 문서','My Documents':'내 문서','Pending Approval':'결재 대기','All Documents':'전체 문서','Users':'사용자','Settings':'설정',
   'DASHBOARD':'대시보드','NEW DOCUMENT':'새 문서','MY DOCUMENTS':'내 문서','PENDING APPROVAL':'결재 대기','ALL DOCUMENTS':'전체 문서','USERS':'사용자 관리','SETTINGS':'설정',
   'Overview':'개요','Create':'작성','My':'내','Action Required':'조치 필요','Everything':'전체','Admin':'관리자','Manager':'매니저','Staff':'직원',
-  'Total':'전체','Pending':'대기','Approved':'승인','Rejected':'반려',
+  'Total':'전체','Pending':'대기','Approved':'승인','Rejected':'반려','Info Req':'질의중',
   'Recent Documents':'최근 문서','Documents I Submitted':'내가 올린 문서','Documents Awaiting Your Approval':'내 결재 대기 문서','Complete Document Log':'전체 문서 이력',
   'Doc No.':'문서번호','Title':'제목','Type':'종류','Requester':'기안자','Progress':'진행','Date':'날짜','Status':'상태','Action':'처리','Priority':'우선순위','My Step':'내 차례','Name':'이름','Full Name':'이름','Email':'이메일','Email Address':'이메일 주소','Role':'권한','Step':'단계','History':'이력','Content':'내용','Content / Details':'내용 / 상세','Attachments':'첨부파일','Document Detail':'문서 상세','Approval Line':'결재라인','CC':'참조',
   '+ New Document':'+ 새 문서','+ New':'+ 새로','Submit for Approval →':'결재 상신 →','Save as Draft':'임시저장','✕ Cancel':'✕ 취소','Save Changes →':'변경 저장 →','Save Template →':'템플릿 저장 →','Send Test Email':'테스트 메일 발송','Add User':'사용자 추가','Add User →':'사용자 추가 →','New Approval Line Template':'새 결재라인 템플릿','Approve':'승인','Approve Document':'문서 승인','Reject':'반려','Edit':'수정','Edit User':'사용자 수정','Delete':'삭제','Remove':'제거','Cancel':'취소','Close':'닫기','Archive':'보관','View':'보기','Resubmit':'재상신','Recall':'회수',
   'No documents found.':'문서가 없습니다.','No attachments':'첨부파일 없음','No content':'내용 없음','No email':'이메일 없음','Loading...':'불러오는 중...',
+  'Comment (Optional)':'의견 (선택)','Discussion':'의견 · 질의응답','Info Requested':'질의중',
   'User ID':'아이디','Password':'비밀번호','Confirm Password':'비밀번호 확인','New Password':'새 비밀번호','LOGIN →':'로그인 →','Invalid ID or password.':'아이디 또는 비밀번호가 올바르지 않습니다.',
   '🏠 HOME':'🏠 홈','LOGOUT':'로그아웃','Logout':'로그아웃'
 };
 var _KRPLACE = { 'Search...':'검색...','Enter document title':'문서 제목 입력','Describe the purpose and details...':'목적과 상세 내용을 입력하세요...' };
 function translateApprovalKR(root){
   root = root || document;
-  var sel = '.sidebar-section, .page-title-tag, .page-title, .stat-label, .table-title, th, .sidebar-item span, td.empty, .empty-state, .field-label, .topbar-logout, .hub-topbar-logout, .modal-title, .modal-header, .table-title';
+  var sel = '.sidebar-section, .page-title-tag, .page-title, .stat-label, .table-title, th, .sidebar-item span, td.empty, .empty-state, .field-label, .topbar-logout, .hub-topbar-logout, .modal-title, .modal-header, .table-title, .detail-label';
   root.querySelectorAll(sel).forEach(function(el){ if(el.children.length) return; var k=(el.textContent||'').trim(); if(_KRDICT[k]!=null) el.textContent=_KRDICT[k]; });
   root.querySelectorAll('button, .btn, .btn-sm').forEach(function(b){ if(!b.children.length){ var k=(b.textContent||'').trim(); if(_KRDICT[k]!=null) b.textContent=_KRDICT[k]; } });
   root.querySelectorAll('input[placeholder]').forEach(function(i){ var k=(i.getAttribute('placeholder')||'').trim(); if(_KRPLACE[k]!=null) i.setAttribute('placeholder',_KRPLACE[k]); });
@@ -2135,16 +2152,26 @@ function showPage(name) {
 }
 
 function isMyTurn(doc) {
-  if (doc.status !== 'pending' || !doc.approvers || !doc.approvers.length) return false;
+  if ((doc.status !== 'pending' && doc.status !== 'info_requested') || !doc.approvers || !doc.approvers.length) return false;
   const step = doc.currentStep || 0;
   return doc.approvers[step] && doc.approvers[step].id === currentUser.id && doc.approvers[step].status === 'pending';
 }
+
+// ── 질의(Info Request) — 승인/반려 전에 기안자에게 확인하는 단계 ──
+function needsMyAnswer(doc) {
+  return doc.status === 'info_requested' && sameId(doc.requesterId, currentUser.id);
+}
+function askedBy(doc) { return (doc.infoRequest && doc.infoRequest.by) || null; }
 
 function refreshAll() {
   refreshPage('dashboard');
   const cnt = docs.filter(d => isMyTurn(d)).length;
   const badge = document.getElementById('pendingBadge');
   badge.textContent = cnt; badge.style.display = cnt > 0 ? 'inline-block' : 'none';
+  // 내가 답변해야 할 질의 건수
+  const ansCnt = docs.filter(d => needsMyAnswer(d)).length;
+  const mBadge = document.getElementById('mineBadge');
+  if (mBadge) { mBadge.textContent = ansCnt; mBadge.style.display = ansCnt > 0 ? 'inline-block' : 'none'; }
   refreshTemplateDropdown();
   renderTemplates();
 }
@@ -2307,6 +2334,7 @@ function renderDashboard() {
   const visible = getVisibleDocs();
   document.getElementById('stat-total').textContent = visible.length;
   document.getElementById('stat-pending').textContent = visible.filter(d => d.status === 'pending').length;
+  document.getElementById('stat-info').textContent = visible.filter(d => d.status === 'info_requested').length;
   document.getElementById('stat-approved').textContent = visible.filter(d => d.status === 'approved').length;
   document.getElementById('stat-rejected').textContent = visible.filter(d => d.status === 'rejected' || hasBeenRejected(d)).length;
   renderTable('recentTable', [...visible].sort((a,b) => b.createdAt - a.createdAt).slice(0, 8), 'all');
@@ -2320,7 +2348,7 @@ function progressHtml(doc) {
     let cls = 'waiting', lbl = i + 1;
     if (a.status === 'approved') { cls = 'done'; lbl = '✓'; }
     else if (a.status === 'rejected') { cls = 'rejected-dot'; lbl = '✕'; }
-    else if (i === step && doc.status === 'pending') { cls = 'current'; }
+    else if (i === step && (doc.status === 'pending' || doc.status === 'info_requested')) { cls = 'current'; }
     const name = getUserName(a.id).split(' ')[0];
     const arrow = i < doc.approvers.length - 1 ? '<span class="progress-arrow">›</span>' : '';
     return `<div class="progress-step"><div class="progress-dot ${cls}">${lbl}</div><div class="progress-name">${name}</div></div>${arrow}`;
@@ -2332,16 +2360,21 @@ function hasBeenRejected(doc) {
   return !!(doc && doc.history && doc.history.some(h => h.action === 'rejected'));
 }
 function statusBadge(s) {
-  return `<span class="status-badge status-${s}">${{pending:'Pending',approved:'Approved',rejected:'Rejected',draft:'Draft'}[s]||s}</span>`;
+  const _SL = IS_KR
+    ? {pending:'대기',approved:'승인',rejected:'반려',draft:'임시저장',info_requested:'질의중'}
+    : {pending:'Pending',approved:'Approved',rejected:'Rejected',draft:'Draft',info_requested:'Info Req'};
+  return `<span class="status-badge status-${s}">${_SL[s]||s}</span>`;
 }
 function statusBadgeFor(doc) {
   let html = statusBadge(doc.status);
   if (doc.status !== 'rejected' && hasBeenRejected(doc)) {
-    html += ` <span class="status-badge status-rejected" style="font-size:0.65rem;padding:0.15rem 0.4rem;margin-left:0.3rem;opacity:0.8;" title="이전에 반려된 적 있음 / Previously Rejected">↻ Rejected</span>`;
+    html += ` <span class="status-badge status-rejected" style="font-size:0.65rem;padding:0.15rem 0.4rem;margin-left:0.3rem;opacity:0.8;" title="이전에 반려된 적 있음 / Previously Rejected">↻ ${IS_KR?'반려이력':'Rejected'}</span>`;
   }
   return html;
 }
 function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-US', {year:'numeric', month:'short', day:'numeric'}); }
+function fmtDateTime(ts) { try { return new Date(ts).toLocaleString(IS_KR?'ko-KR':'en-US', {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e) { return fmtDate(ts); } }
+function escHtml(t) { return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function sameId(a, b) { return !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase(); }
 function getUserName(id) { const u = users.find(u => sameId(u.id, id)); return u ? u.name : id; }
 
@@ -2378,7 +2411,15 @@ function buildActions(doc, mode) {
   let b = `<button class="btn-sm btn-sm-accent" onclick="viewDoc('${doc.id}')">View</button> `;
   if (mode === 'pending' && isMyTurn(doc)) {
     b += `<button class="btn-sm" style="background:var(--green);color:white;margin-right:2px" onclick="openApprove('${doc.id}','approve')">Approve</button>`;
-    b += `<button class="btn-sm" style="background:var(--red);color:white" onclick="openApprove('${doc.id}','reject')">Reject</button>`;
+    b += `<button class="btn-sm" style="background:var(--red);color:white;margin-right:2px" onclick="openApprove('${doc.id}','reject')">Reject</button>`;
+    // ★ 질의 — 승인/반려 대신 기안자에게 물어보기 (질의중이면 답변 대기 표시)
+    b += doc.status === 'info_requested'
+      ? `<span class="status-badge status-info_requested" title="기안자 답변 대기 중">⏳ ${IS_KR?'답변 대기':'Awaiting Answer'}</span>`
+      : `<button class="btn-sm" style="background:#ff9900;color:#000;font-weight:600" onclick="openAsk('${doc.id}','ask')">❓ ${IS_KR?'질의':'Ask'}</button>`;
+  }
+  // ★ 질의 받은 내 문서 — 답변 버튼
+  if (mode === 'mine' && needsMyAnswer(doc)) {
+    b += ` <button class="btn-sm" style="background:#ff9900;color:#000;font-weight:700" onclick="openAsk('${doc.id}','answer')">↩︎ ${IS_KR?'답변':'Answer'}</button>`;
   }
   // ★ 반려/임시저장된 내 문서에 Edit 버튼 표시
   if (mode === 'mine' && (doc.status === 'rejected' || doc.status === 'draft') && sameId(doc.requesterId, currentUser.id)) {
@@ -2412,7 +2453,7 @@ function buildActions(doc, mode) {
       && !purchaseComplete) {
     b += ` <button class="btn-sm" style="background:#fbbf24;color:#000;font-weight:600;" onclick="updateActualAmount('${doc.id}')">💰 결제액 갱신</button>`;
   }
-  if (mode === 'mine' && (doc.status === 'draft' || doc.status === 'pending' || doc.status === 'rejected')) {
+  if (mode === 'mine' && (doc.status === 'draft' || doc.status === 'pending' || doc.status === 'rejected' || doc.status === 'info_requested')) {
     b += ` <button class="btn-sm btn-sm-outline" onclick="deleteDoc('${doc.id}')">Delete</button>`;
   }
   return b;
@@ -3022,19 +3063,38 @@ function viewDoc(docId) {
     const cls = h.action==='approved'?'h-approved'
               : h.action==='rejected'?'h-rejected'
               : h.action==='resubmitted'?'h-resubmitted'
+              : h.action==='info_requested'?'h-info_requested'
+              : h.action==='info_answered'?'h-info_answered'
               : h.action==='submitted'?'h-pending':'h-draft';
-    const label = h.action==='resubmitted' ? 'RESUBMITTED' : h.action.toUpperCase();
+    const _HL = {submitted:'상신',approved:'승인',rejected:'반려',resubmitted:'재상신',draft:'임시저장',
+                 info_requested:'질의',info_answered:'답변',commented:'의견',amount_updated:'결제액 갱신'};
+    const label = IS_KR ? (_HL[h.action] || h.action)
+              : h.action==='resubmitted' ? 'RESUBMITTED'
+              : h.action==='info_requested' ? 'INFO REQUESTED'
+              : h.action==='info_answered' ? 'ANSWERED'
+              : h.action.toUpperCase();
     return `<div class="history-item"><div class="history-dot ${cls}"></div><div>
       <div class="history-text"><strong>${getUserName(h.by)}</strong> — ${label}${h.comment?': "'+h.comment+'"':''}</div>
       <div class="history-time">${fmtDate(h.at)}</div>
     </div></div>`;
   }).join('');
 
+  // ── 의견 · 질의응답 스레드 ──
+  const cmts = doc.comments || [];
+  const commentsHtml = cmts.length ? cmts.map(c => {
+    const k = c.type === 'question' ? 'q' : c.type === 'answer' ? 'a' : '';
+    const tag = c.type === 'question' ? (IS_KR?'질의':'Question') : c.type === 'answer' ? (IS_KR?'답변':'Answer') : (IS_KR?'의견':'Comment');
+    return `<div class="cmt-item ${k}">
+      <div class="cmt-head"><span class="cmt-who">${getUserName(c.by)}</span><span class="cmt-tag ${k}">${tag}</span><span class="cmt-time">${fmtDateTime(c.at)}</span></div>
+      <div class="cmt-body">${escHtml(c.text)}</div>
+    </div>`;
+  }).join('') : `<div style="color:var(--mid);font-size:0.85rem;font-style:italic;">${IS_KR?'아직 등록된 의견이 없습니다.':'No comments yet.'}</div>`;
+
   const approverDetail = (doc.approvers||[]).map((a, i) =>
     `<div style="font-size:0.82rem;color:var(--light);display:flex;gap:1rem;align-items:center;padding:0.3rem 0;flex-wrap:wrap;">
       <span style="color:var(--accent);min-width:55px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">STEP ${i+1}</span>
       <span>${getUserName(a.id)}</span>
-      <span class="status-badge status-${a.status}">${a.status}</span>
+      <span class="status-badge status-${a.status}">${IS_KR?({pending:'대기',approved:'승인',rejected:'반려'}[a.status]||a.status):a.status}</span>
       ${a.comment?`<span style="color:var(--mid);font-style:italic">"${a.comment}"</span>`:''}
     </div>`
   ).join('');
@@ -3059,6 +3119,14 @@ function viewDoc(docId) {
     <div class="detail-row" style="flex-direction:column;gap:0.5rem;">
       <div class="detail-label">Attachments</div><div>${fileHtml}</div>
     </div>
+    <div class="cmt-wrap">
+      <div class="detail-label" style="margin-bottom:0.8rem;">${IS_KR?'의견 · 질의응답':'Discussion'}</div>
+      ${commentsHtml}
+      <div style="margin-top:0.8rem;display:flex;gap:0.5rem;align-items:flex-start;">
+        <textarea id="docCommentInput" class="field-input" style="flex:1;min-height:58px;" placeholder="${IS_KR?'의견을 남기세요 — 기안자·현재 결재자에게 메일로 알립니다':'Leave a comment — notifies requester and current approver'}"></textarea>
+        <button class="btn btn-outline" style="white-space:nowrap;" onclick="postComment()">${IS_KR?'등록':'Post'}</button>
+      </div>
+    </div>
     <div style="margin-top:1.5rem;">
       <div class="detail-label" style="margin-bottom:0.8rem;">History</div>${historyHtml}
     </div>`;
@@ -3068,6 +3136,13 @@ function viewDoc(docId) {
     footer = `<button class="btn btn-outline" onclick="closeModal('detailModal')">Close</button>
       <button class="btn btn-green" onclick="closeModal('detailModal');openApprove('${doc.id}','approve')">Approve</button>
       <button class="btn btn-red" onclick="closeModal('detailModal');openApprove('${doc.id}','reject')">Reject</button>`;
+    if (doc.status !== 'info_requested') {
+      footer += ` <button class="btn" style="background:#ff9900;color:#000;font-weight:700;" onclick="closeModal('detailModal');openAsk('${doc.id}','ask')">❓ ${IS_KR?'질의':'Ask'}</button>`;
+    }
+  }
+  // 질의 받은 기안자 — 답변 버튼
+  if (needsMyAnswer(doc)) {
+    footer += ` <button class="btn" style="background:#ff9900;color:#000;font-weight:700;" onclick="closeModal('detailModal');openAsk('${doc.id}','answer')">↩︎ ${IS_KR?'답변':'Answer'}</button>`;
   }
   // View 모달에서도 Edit 버튼 (반려된 내 문서)
   if (doc.status === 'rejected' && sameId(doc.requesterId, currentUser.id)) {
@@ -3080,12 +3155,17 @@ function viewDoc(docId) {
 // ── APPROVE / REJECT ──
 function openApprove(docId, action) {
   currentDocId = docId;
-  document.getElementById('approveModalTitle').textContent = action==='approve' ? '✓ Approve Document' : '✕ Reject Document';
+  document.getElementById('approveModalTitle').textContent = action==='approve'
+    ? (IS_KR ? '✓ 문서 승인' : '✓ Approve Document')
+    : (IS_KR ? '✕ 문서 반려' : '✕ Reject Document');
   document.getElementById('approveComment').value = '';
+  const _lb = document.querySelector('#approveModal .field-label');
+  if (_lb) _lb.textContent = IS_KR ? '의견 (선택)' : 'Comment (Optional)';
+  document.getElementById('approveComment').placeholder = IS_KR ? '의견을 남기세요...' : 'Leave a comment...';
   document.getElementById('approveFooter').innerHTML = `
-    <button class="btn btn-outline" onclick="closeModal('approveModal')">Cancel</button>
+    <button class="btn btn-outline" onclick="closeModal('approveModal')">${IS_KR?'취소':'Cancel'}</button>
     <button class="btn ${action==='approve'?'btn-green':'btn-red'}" onclick="doApprove('${action}')">
-      ${action==='approve'?'Confirm Approve':'Confirm Reject'} →
+      ${action==='approve'?(IS_KR?'승인 확정':'Confirm Approve'):(IS_KR?'반려 확정':'Confirm Reject')} →
     </button>`;
   document.getElementById('approveModal').classList.add('open');
 }
@@ -3142,9 +3222,88 @@ async function doApprove(action) {
     }
   }
 
-  if (action === 'approve' && doc.status === 'approved') alert('✓ All steps approved!' + syncMsg);
-  else if (action === 'approve') alert('✓ Step ' + (stepNum+1) + ' approved. Forwarded to Step ' + (stepNum+2) + '.');
-  else alert('✕ Document rejected.');
+  if (action === 'approve' && doc.status === 'approved') alert((IS_KR?'✓ 최종 결재 완료!':'✓ All steps approved!') + syncMsg);
+  else if (action === 'approve') alert(IS_KR
+    ? ('✓ ' + (stepNum+1) + '단계 승인 완료. ' + (stepNum+2) + '단계로 전달했습니다.')
+    : ('✓ Step ' + (stepNum+1) + ' approved. Forwarded to Step ' + (stepNum+2) + '.'));
+  else alert(IS_KR ? '✕ 문서를 반려했습니다.' : '✕ Document rejected.');
+}
+
+// ── 질의 / 답변 / 의견 ──
+function openAsk(docId, mode) {
+  const doc = docs.find(d => d.id === docId); if (!doc) return;
+  currentDocId = docId;
+  const isAsk = mode === 'ask';
+  document.getElementById('approveModalTitle').textContent = isAsk
+    ? (IS_KR ? '❓ 질의 — 기안자에게 확인' : '❓ Ask the Requester')
+    : (IS_KR ? '↩︎ 답변 — 결재자에게 회신' : '↩︎ Answer the Approver');
+  const _lb = document.querySelector('#approveModal .field-label');
+  if (_lb) _lb.textContent = isAsk
+    ? (IS_KR ? '질의 내용 (필수)' : 'Question (required)')
+    : (IS_KR ? '답변 내용 (필수)' : 'Answer (required)');
+  const ta = document.getElementById('approveComment');
+  ta.value = '';
+  ta.placeholder = isAsk
+    ? (IS_KR ? '예) 이 품목이 지금 필요한 이유와 다른 견적 비교 결과를 알려주세요.' : 'e.g. Why is this needed now? Did you compare other quotes?')
+    : (IS_KR ? '질문에 대한 답변을 작성하세요.' : 'Write your answer.');
+  document.getElementById('approveFooter').innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal('approveModal')">${IS_KR?'취소':'Cancel'}</button>
+    <button class="btn" style="background:#ff9900;color:#000;font-weight:700;" onclick="doAsk('${mode}')">
+      ${isAsk ? (IS_KR?'질의 보내기 →':'Send Question →') : (IS_KR?'답변 보내기 →':'Send Answer →')}
+    </button>`;
+  document.getElementById('approveModal').classList.add('open');
+}
+
+async function doAsk(mode) {
+  const doc = docs.find(d => d.id === currentDocId); if (!doc) return;
+  const text = document.getElementById('approveComment').value.trim();
+  if (!text) { alert(IS_KR ? '내용을 입력하세요.' : 'Please enter a message.'); return; }
+  const now = Date.now();
+  if (!doc.comments) doc.comments = [];
+  if (!doc.history) doc.history = [];
+  if (mode === 'ask') {
+    if (!isMyTurn(doc)) { alert(IS_KR?'현재 결재 차례가 아닙니다.':'It is not your turn.'); return; }
+    doc.comments.push({ by: currentUser.id, at: now, text: text, type: 'question' });
+    doc.history.push({ action: 'info_requested', by: currentUser.id, at: now, comment: text });
+    doc.infoRequest = { by: currentUser.id, at: now, step: doc.currentStep || 0 };
+    doc.status = 'info_requested';
+    await saveDoc(doc);
+    sendEmail(doc.requesterId, doc, 'info_requested', text);
+    closeModal('approveModal');
+    alert(IS_KR ? '❓ 질의를 보냈습니다. 기안자 답변 후 승인/반려를 결정하세요.' : '❓ Question sent to the requester.');
+  } else {
+    if (!needsMyAnswer(doc)) { alert(IS_KR?'답변할 질의가 없습니다.':'No pending question.'); return; }
+    const asker = askedBy(doc);
+    doc.comments.push({ by: currentUser.id, at: now, text: text, type: 'answer' });
+    doc.history.push({ action: 'info_answered', by: currentUser.id, at: now, comment: text });
+    doc.status = 'pending';
+    doc.infoRequest = null;
+    await saveDoc(doc);
+    if (asker) sendEmail(asker, doc, 'info_answered', text);
+    closeModal('approveModal');
+    alert(IS_KR ? '↩︎ 답변을 보냈습니다. 결재자에게 알림이 전달됐습니다.' : '↩︎ Answer sent to the approver.');
+  }
+  saveData(); refreshAll();
+  refreshPage('mine'); refreshPage('pending'); refreshPage('all');
+}
+
+// 상태를 바꾸지 않는 일반 의견 — 기안자·현재 결재자에게 메일 알림
+async function postComment() {
+  const doc = docs.find(d => d.id === currentDocId); if (!doc) return;
+  const el = document.getElementById('docCommentInput'); if (!el) return;
+  const text = el.value.trim();
+  if (!text) return;
+  const now = Date.now();
+  if (!doc.comments) doc.comments = [];
+  doc.comments.push({ by: currentUser.id, at: now, text: text, type: 'comment' });
+  await saveDoc(doc);
+  el.value = '';
+  const targets = [];
+  if (!sameId(doc.requesterId, currentUser.id)) targets.push(doc.requesterId);
+  const cur = (doc.approvers || [])[doc.currentStep || 0];
+  if (cur && !sameId(cur.id, currentUser.id) && !targets.some(t => sameId(t, cur.id))) targets.push(cur.id);
+  targets.forEach(t => sendEmail(t, doc, 'commented', text));
+  viewDoc(doc.id);
 }
 
 // ── 자산 sync 제외 판정 — KR 법인/아마존카드 결제 비용청구는 월정산으로 일괄 처리 ──
@@ -3416,13 +3575,15 @@ async function exportToExcel() {
     return {
       '문서번호': d.docNo||'', '제목': d.title||'', '종류': d.type||'', '우선순위': d.priority||'',
       '요청자': requester?requester.name:d.requesterId,
-      '상태': d.status==='approved'?'승인':d.status==='rejected'?'반려':d.status==='pending'?'대기':d.status,
+      '상태': d.status==='approved'?'승인':d.status==='rejected'?'반려':d.status==='pending'?'대기':d.status==='info_requested'?'질의중':d.status,
       '결재라인': approverNames, '참조자': (d.cc||[]).map(id=>getUserName(id)).join(', ')||'없음',
-      '내용': d.content||'', '작성일': d.createdAt?new Date(d.createdAt).toLocaleDateString('ko-KR'):''
+      '내용': d.content||'',
+      '질의응답': (d.comments||[]).map(c => `${getUserName(c.by)}(${c.type==='question'?'질의':c.type==='answer'?'답변':'의견'}): ${c.text}`).join('  |  '),
+      '작성일': d.createdAt?new Date(d.createdAt).toLocaleDateString('ko-KR'):''
     };
   });
   const ws = XLSX.utils.json_to_sheet(data);
-  ws['!cols'] = [{wch:14},{wch:30},{wch:12},{wch:10},{wch:16},{wch:8},{wch:40},{wch:20},{wch:40},{wch:14}];
+  ws['!cols'] = [{wch:14},{wch:30},{wch:12},{wch:10},{wch:16},{wch:8},{wch:40},{wch:20},{wch:40},{wch:50},{wch:14}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Approval Documents');
   XLSX.writeFile(wb, 'approval_documents_' + new Date().toISOString().slice(0,10) + '.xlsx');
