@@ -393,6 +393,7 @@
     <div class="topbar-logo"><a href="index.html">ROUTE <span>SYSTEM</span></a> — APPROVAL<span id="branchBadge"></span></div>
     <div class="topbar-right">
       <div class="topbar-user"><div class="user-dot"></div><span id="topbarUser">—</span></div>
+      <span id="branchSwitchApp" style="margin-right:4px;"></span>
       <div class="topbar-logout" onclick="backToHub()" style="background:var(--accent);color:var(--black);border-color:var(--accent);font-weight:600;padding:8px 20px;font-size:0.85rem">&#127968; HOME</div>
       <div class="topbar-logout" onclick="doLogout()">Logout</div>
     </div>
@@ -841,7 +842,19 @@ const CUR_DEC  = IS_KR ? 0 : 2;
 const CUR_PH   = IS_KR ? '0' : '0.00';
 function fmtCUR(n){ return IS_KR ? '₩ ' + fmtKRW(n) : '$ ' + fmtNum(n); }
 function fmtAmt(n){ return IS_KR ? fmtKRW(n) : fmtNum(n); }
-function switchBranch(b){ try{ sessionStorage.setItem('rs_branch', String(b).toUpperCase()); }catch(e){} location.href = location.pathname + '?branch=' + b; }
+function _curScreen(){ try{ var a=document.getElementById('app'); return (a && a.style.display==='block') ? 'approval' : 'hub'; }catch(e){ return 'hub'; } }
+function switchBranch(b){
+  if (String(b).toUpperCase() === BRANCH) return;              // 이미 그 지점이면 무시
+  try{ sessionStorage.setItem('rs_branch', String(b).toUpperCase());
+       sessionStorage.setItem('rs_screen', _curScreen()); }catch(e){}
+  location.href = location.pathname + '?branch=' + b;          // 로그인 세션은 유지됨(자동 복원)
+}
+// 반대편 지점을 새 탭으로 (두 지점 동시에 열어두고 비교)
+function openBranchTab(){
+  var other = IS_KR ? 'us' : 'kr';
+  try{ sessionStorage.setItem('rs_screen', _curScreen()); }catch(e){}
+  window.open(location.pathname + '?branch=' + other, '_blank');
+}
 // 한국 모드: 전자결재 앱 화면(사이드바·대시보드·표 헤더·버튼)을 한글로 (US는 영문 유지)
 var _KRDICT = {
   'Main':'메인','Documents':'문서','System':'시스템','Configuration':'설정',
@@ -867,16 +880,20 @@ function translateApprovalKR(root){
 }
 document.addEventListener('DOMContentLoaded', function(){
   // 허브 상단 미국/한국 전환 스위치 (양쪽 모드에서 표시)
-  var sw = document.getElementById('branchSwitch');
-  if (sw) {
+  function renderBranchSwitch(sw, compact) {
+    if (!sw) return;
     var onCss = 'background:var(--accent);color:#000;font-weight:800;border-color:var(--accent);box-shadow:0 2px 10px rgba(200,169,110,0.4);';
     var offCss = 'background:transparent;color:var(--mid);font-weight:600;border-color:var(--gray);';
-    var base = 'cursor:pointer;padding:7px 15px;border-radius:9px;font-size:0.9rem;letter-spacing:0.5px;border:1.5px solid;display:inline-flex;align-items:center;gap:5px;transition:all .15s;';
+    var pad = compact ? '4px 10px' : '7px 15px', fsz = compact ? '0.78rem' : '0.9rem';
+    var base = 'cursor:pointer;padding:'+pad+';border-radius:9px;font-size:'+fsz+';letter-spacing:0.5px;border:1.5px solid;display:inline-flex;align-items:center;gap:5px;transition:all .15s;';
     sw.innerHTML =
-      '<span style="font-size:0.62rem;color:var(--mid);letter-spacing:2px;margin-right:9px;text-transform:uppercase;">지점 · Branch</span>' +
-      '<span onclick="switchBranch(\'us\')" style="'+base+(IS_KR?offCss:onCss)+'">🇺🇸 미국</span>' +
-      '<span onclick="switchBranch(\'kr\')" style="'+base+(IS_KR?onCss:offCss)+'margin-left:7px;">🇰🇷 한국</span>';
+      (compact ? '' : '<span style="font-size:0.62rem;color:var(--mid);letter-spacing:2px;margin-right:9px;text-transform:uppercase;">지점 · Branch</span>') +
+      '<span onclick="switchBranch(&#39;us&#39;)" title="미국 지점으로 전환 (재로그인 없음)" style="'+base+(IS_KR?offCss:onCss)+'">🇺🇸 미국</span>' +
+      '<span onclick="switchBranch(&#39;kr&#39;)" title="한국 지점으로 전환 (재로그인 없음)" style="'+base+(IS_KR?onCss:offCss)+'margin-left:6px;">🇰🇷 한국</span>' +
+      '<span onclick="openBranchTab()" title="반대편 지점을 새 탭으로 열기" style="'+base+offCss+'margin-left:6px;padding:'+(compact?'4px 8px':'7px 11px')+';">&#8599; 새탭</span>';
   }
+  renderBranchSwitch(document.getElementById('branchSwitch'), false);
+  renderBranchSwitch(document.getElementById('branchSwitchApp'), true);
   if (IS_KR) {
     var el = document.getElementById('branchBadge');
     if (el) { el.textContent = '  🇰🇷 한국법인 (주)라우트시스템'; el.style.color = '#c8a96e'; el.style.fontWeight = '700'; el.style.fontSize = '0.8rem'; }
@@ -946,6 +963,55 @@ window.addEventListener('load', function() {
 
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+
+    // ── 로그인 1회 → 새로고침·지점전환·새 탭 모두 세션 유지 (자동 복원) ──
+    // Firebase 세션(LOCAL persistence)이 살아있으면 로그인 화면을 건너뛰고
+    // 마지막에 보던 화면(허브/전자결재)으로 바로 복귀한다.
+    try { firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(e) {}
+    (function(){
+      var isReauth = false;
+      try { isReauth = !!new URLSearchParams(window.location.search).get('reauth'); } catch(e) {}
+      var box = document.querySelector('#loginScreen .login-box');
+      var note = null, revealed = false;
+      function revealLogin(){
+        if (revealed) return; revealed = true;
+        if (box) box.style.visibility = '';
+        if (note && note.parentNode) note.parentNode.removeChild(note);
+      }
+      // 세션 확인 동안 로그인 폼 깜빡임 방지
+      if (box) {
+        box.style.visibility = 'hidden';
+        note = document.createElement('div');
+        note.textContent = IS_KR ? '세션 확인 중…' : 'Checking session…';
+        note.style.cssText = 'position:absolute;left:0;right:0;top:50%;text-align:center;color:var(--mid);font-size:0.85rem;letter-spacing:1px;';
+        var lsc = document.getElementById('loginScreen'); if (lsc) lsc.appendChild(note);
+      }
+      setTimeout(revealLogin, 5000);   // Firebase가 안 뜨는 경우 대비
+      var done = false;
+      firebase.auth().onAuthStateChanged(async function(u){
+        if (!u) { revealLogin(); return; }
+        if (isReauth) { revealLogin(); return; }   // reauth 흐름은 기존 핸들러가 앱으로 되돌림
+        if (done || currentUser) return;
+        done = true;
+        try {
+          var email = (u.email || '').toLowerCase();
+          if (!usersLoaded) await waitUntil(() => usersLoaded, 6000);
+          var user = usersLoaded
+            ? users.find(x => (x.email && x.email.toLowerCase() === email) || x.firebase_uid === u.uid)
+            : null;
+          if (!user) { try { var snap = await db.collection('users').doc(email).get(); if (snap.exists) user = snap.data(); } catch(_) {} }
+          if (!user) user = { id: email, name: u.displayName || email, email: email, role: 'Staff', firebase_uid: u.uid };
+          currentUser = user;
+          revealLogin();
+          document.getElementById('loginScreen').style.display = 'none';
+          document.getElementById('hubScreen').style.display = 'flex';
+          document.getElementById('hubUser').textContent = user.name + ' (' + user.role + ')';
+          history.replaceState({screen:'hub'}, '', '');
+          var want = null; try { want = sessionStorage.getItem('rs_screen'); } catch(e) {}
+          if (want === 'approval') enterApproval();
+        } catch(e) { console.error('[session restore] 실패', e); revealLogin(); }
+      });
+    })();
 
     // ── 앱 세션 만료 시 무중단 재-SSO ──
     // 각 앱이 세션 만료되면 ?reauth=<app> 으로 허브에 들어옴.
@@ -1338,6 +1404,7 @@ async function enterQuotation() {
   } catch(e) { alert('Quotation 접속 실패: '+e.message); }
 }
 function enterApproval() {
+  try{ sessionStorage.setItem('rs_screen','approval'); }catch(e){}
   document.getElementById('hubScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('topbarUser').textContent = currentUser.name + ' (' + currentUser.role + ')';
@@ -2106,6 +2173,7 @@ function validateStructured() {
   return null;
 }
 function backToHub() {
+  try{ sessionStorage.setItem('rs_screen','hub'); }catch(e){}
   document.getElementById('app').style.display = 'none';
   document.getElementById('hubScreen').style.display = 'flex';
   history.replaceState({screen:'hub'}, '', '');
@@ -2125,6 +2193,8 @@ window.addEventListener('popstate', function(e) {
   }
 });
 function doLogout() {
+  try { firebase.auth().signOut(); } catch(e) {}
+  try { sessionStorage.removeItem('rs_screen'); } catch(e) {}
   currentUser = null;
   editingDocId = null;
   document.getElementById('app').style.display = 'none';
