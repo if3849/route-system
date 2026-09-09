@@ -165,6 +165,11 @@
     .stat-label { font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; color:var(--mid); }
 
     .table-wrap { background:var(--dark); border:1px solid var(--dark3); }
+    /* 표는 자기 영역 안에서 가로 스크롤 (body는 overflow-x:hidden 이라 표가 넘치면 잘려버림) */
+    .table-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .nav-toggle { display:none; cursor:pointer; font-size:1.35rem; line-height:1; color:var(--accent); margin-right:10px; user-select:none; }
+    #navBackdrop { display:none; position:fixed; top:60px; left:0; right:0; bottom:0; background:rgba(0,0,0,0.55); z-index:85; }
+    #navBackdrop.show { display:block; }
     .table-toolbar { display:flex; align-items:center; justify-content:space-between; padding:1rem 1.5rem; border-bottom:1px solid var(--dark3); flex-wrap:wrap; gap:0.8rem; }
     .table-title { font-family:'Barlow Condensed',sans-serif; font-size:0.8rem; letter-spacing:2px; text-transform:uppercase; color:var(--light); }
     .search-input { background:var(--dark2); border:1px solid var(--gray); color:var(--white); padding:8px 12px; font-family:'Barlow',sans-serif; font-size:0.85rem; outline:none; width:200px; transition:border-color 0.2s; }
@@ -302,11 +307,48 @@
       border-left: 3px solid var(--blue);
     }
 
-    @media (max-width: 768px) {
-      .sidebar { display:none; }
+    @media (max-width: 900px) {
+      /* 사이드바: 숨기지 않고 서랍(drawer)으로 — 햄버거(☰)로 열고 닫음 */
+      .nav-toggle { display:inline-block; }
+      .sidebar { width:250px; transform:translateX(-100%); transition:transform 0.25s ease; box-shadow:0 0 30px rgba(0,0,0,0.7); }
+      .sidebar.open { transform:translateX(0); }
       .main { margin-left:0; }
+
+      /* 표: 가로 스크롤로 오른쪽(상태·처리 버튼)까지 도달 가능하게 */
+      .table-scroll table { min-width:840px; }
+      .table-toolbar { padding:0.8rem 1rem; }
+      th { padding:0.8rem 0.9rem; }
+      td { padding:0.75rem 0.9rem; }
+      .search-input { width:100%; }
+
+      /* 상단바 정리 — 좁아지면 로고부터 줄어들고 오른쪽 버튼은 항상 보이게 */
+      .topbar { padding:0 0.6rem; }
+      .topbar-logo { font-size:1.05rem; letter-spacing:2px; flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .topbar-logo-sub { display:none; }
+      .topbar-right { gap:0.5rem; flex:0 0 auto; }
+      .topbar-user { display:none; }
+      #branchBadge { display:none; }
+      .topbar-logout { padding:6px 11px !important; font-size:0.72rem !important; }
+
+      .page { padding:1rem; }
+      .page-title { font-size:1.7rem; }
       .stats-grid { grid-template-columns:1fr 1fr; }
+      .stat-card { padding:1rem; }
+      .stat-num { font-size:1.9rem; }
       .form-row { grid-template-columns:1fr; }
+
+      .modal-header { padding:1rem 1.2rem; }
+      .modal-body { padding:1.2rem; }
+      .modal-footer { padding:0.9rem 1.2rem; }
+      .detail-row { flex-wrap:wrap; }
+      .detail-label { min-width:100px; }
+    }
+
+    @media (max-width: 560px) {
+      .branch-newtab { display:none !important; }   /* 폰에서는 새 탭 대신 지점 토글만 */
+      .topbar-logout { padding:5px 9px !important; font-size:0.68rem !important; }
+      .topbar-logo { font-size:0.95rem; }
+      .stats-grid { grid-template-columns:1fr 1fr; }
     }
   </style>
 </head>
@@ -390,7 +432,7 @@
 <!-- APP -->
 <div id="app">
   <div class="topbar">
-    <div class="topbar-logo"><a href="index.html">ROUTE <span>SYSTEM</span></a> — APPROVAL<span id="branchBadge"></span></div>
+    <div class="topbar-logo"><span class="nav-toggle" onclick="toggleNav()" title="메뉴">☰</span><a href="index.html">ROUTE <span>SYSTEM</span></a><span class="topbar-logo-sub"> — APPROVAL</span><span id="branchBadge"></span></div>
     <div class="topbar-right">
       <div class="topbar-user"><div class="user-dot"></div><span id="topbarUser">—</span></div>
       <span id="branchSwitchApp" style="margin-right:4px;"></span>
@@ -398,6 +440,8 @@
       <div class="topbar-logout" onclick="doLogout()">Logout</div>
     </div>
   </div>
+
+  <div id="navBackdrop" onclick="toggleNav(false)"></div>
 
   <div class="sidebar">
     <div class="sidebar-section">Main</div>
@@ -890,7 +934,7 @@ document.addEventListener('DOMContentLoaded', function(){
       (compact ? '' : '<span style="font-size:0.62rem;color:var(--mid);letter-spacing:2px;margin-right:9px;text-transform:uppercase;">지점 · Branch</span>') +
       '<span onclick="switchBranch(&#39;us&#39;)" title="미국 지점으로 전환 (재로그인 없음)" style="'+base+(IS_KR?offCss:onCss)+'">🇺🇸 미국</span>' +
       '<span onclick="switchBranch(&#39;kr&#39;)" title="한국 지점으로 전환 (재로그인 없음)" style="'+base+(IS_KR?onCss:offCss)+'margin-left:6px;">🇰🇷 한국</span>' +
-      '<span onclick="openBranchTab()" title="반대편 지점을 새 탭으로 열기" style="'+base+offCss+'margin-left:6px;padding:'+(compact?'4px 8px':'7px 11px')+';">&#8599; 새탭</span>';
+      '<span class="branch-newtab" onclick="openBranchTab()" title="반대편 지점을 새 탭으로 열기" style="'+base+offCss+'margin-left:6px;padding:'+(compact?'4px 8px':'7px 11px')+';">&#8599; 새탭</span>';
   }
   renderBranchSwitch(document.getElementById('branchSwitch'), false);
   renderBranchSwitch(document.getElementById('branchSwitchApp'), true);
@@ -2172,6 +2216,23 @@ function validateStructured() {
   if (!d.paymentMethod || d.paymentMethod === '미분류') return '결제수단(Payment Method)을 선택해 주세요.';
   return null;
 }
+// ── 모바일: 사이드바 서랍 열기/닫기 ──
+function toggleNav(force) {
+  var sb = document.querySelector('#app .sidebar'), bd = document.getElementById('navBackdrop');
+  if (!sb) return;
+  var open = (force === undefined) ? !sb.classList.contains('open') : !!force;
+  sb.classList.toggle('open', open);
+  if (bd) bd.classList.toggle('show', open);
+}
+// ── 표를 가로 스크롤 컨테이너로 감싸기 (오른쪽 열이 잘려 안 보이는 문제) ──
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.table-wrap > table').forEach(function(t){
+    var w = document.createElement('div');
+    w.className = 'table-scroll';
+    t.parentNode.insertBefore(w, t);
+    w.appendChild(t);
+  });
+});
 function backToHub() {
   try{ sessionStorage.setItem('rs_screen','hub'); }catch(e){}
   document.getElementById('app').style.display = 'none';
@@ -2207,6 +2268,7 @@ function doLogout() {
 
 // ── NAVIGATION ──
 function showPage(name) {
+  try { toggleNav(false); } catch(e) {}
   if (name === 'settings' && currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
     alert('관리자만 접근 가능합니다.'); return;
   }
