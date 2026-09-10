@@ -654,6 +654,45 @@
           <button class="btn btn-gold" onclick="openVendorConfigModal()">⚙️ 벤더 목록 관리</button>
         </div>
       </div>
+
+      <div class="settings-card">
+        <div class="settings-head">🛡️ 사전승인 정책 / Pre-approval Policy</div>
+        <div class="info-box">
+          매장 카드결제는 <strong>구매요청 승인 → 결제 → 비용청구(PO 선택 + 영수증)</strong> 순서가 원칙입니다.<br>
+          구매요청 없이 비용청구를 올리면 사유를 적어야 하고 결재자에게 <strong>⚠️ 사전승인 없음</strong>이 표시됩니다.<br>
+          여기서 <strong>면제 카테고리</strong>(주유·식비·통행료 등)와 <strong>면제 금액</strong>, <strong>예상액 초과 경고 기준(%)</strong>을 관리합니다.
+        </div>
+        <div style="margin-top:1.2rem;">
+          <button class="btn btn-gold" onclick="openPoPolicyModal()">⚙️ 사전승인 정책 관리</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PO POLICY MODAL -->
+<div class="modal-overlay" id="poPolicyModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🛡️ 사전승인 정책 / Pre-approval Policy</div>
+      <button class="modal-close" onclick="closeModal('poPolicyModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:0.78rem;color:var(--mid);margin-bottom:0.8rem;line-height:1.5;">
+        아래 <strong>면제 카테고리</strong> 또는 <strong>면제 금액 이하</strong>인 비용청구는 구매요청(PO) 없이 올려도 경고가 붙지 않습니다.<br>
+        그 외는 PO를 선택하거나, "사전승인 없이 결제한 사유"를 반드시 입력해야 상신됩니다 (⚠️ 배지 표시).
+      </div>
+      <label class="field-label">면제 카테고리 / Exempt Categories</label>
+      <div id="ppCategoryList" style="display:grid;grid-template-columns:1fr 1fr;gap:0.3rem 1rem;max-height:32vh;overflow-y:auto;padding:0.2rem;margin-bottom:0.9rem;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+        <div><label class="field-label">면제 금액 상한 (<span id="ppCurLabel">USD</span>, 이하 면제)</label><input class="field-input" type="text" inputmode="decimal" id="ppExemptAmount" oninput="formatNumberInput(this,CUR_DEC)"/></div>
+        <div><label class="field-label">예상액 초과 경고 기준 (%)</label><input class="field-input" type="number" min="0" step="5" id="ppOveragePct"/></div>
+      </div>
+      <div style="font-size:0.74rem;color:var(--mid);margin-top:0.6rem;">예) 구매요청 예상액 $180, 기준 30% → 실제 결제액이 $234를 넘으면 📈 초과 경고 표시.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('poPolicyModal')">Cancel</button>
+      <button class="btn btn-gold" onclick="savePoPolicy()">저장 / Save</button>
     </div>
   </div>
 </div>
@@ -880,6 +919,7 @@ const ASSET_BRANCH_Q = IS_KR ? '?branch=kr' : '';
 const TEMPLATES_COL = IS_KR ? 'approval_templates_kr' : 'approval_templates';
 const CATWL_ID = IS_KR ? 'category_whitelist_kr' : 'category_whitelist';
 const VENDOR_ID = IS_KR ? 'vendor_list_kr' : 'vendor_list';
+const PO_POLICY_ID = IS_KR ? 'po_policy_kr' : 'po_policy';   // 사전승인(구매요청) 정책 — 면제 카테고리/금액/초과 경고
 // 통화: KR은 원화(₩, 소수점 없음) / US는 달러($, 소수점 2자리). 정형양식 금액표기·환율변환 분기용.
 const CUR_CODE = IS_KR ? 'KRW' : 'USD';
 const CUR_DEC  = IS_KR ? 0 : 2;
@@ -1165,6 +1205,18 @@ window.addEventListener('load', function() {
       console.warn('category_whitelist sync error, using default:', err);
     });
 
+    // 사전승인(구매요청) 정책 — 면제 카테고리/면제 금액/초과 경고 % (Admin이 화면에서 편집) — 실시간 구독
+    db.collection('meta').doc(PO_POLICY_ID).onSnapshot(d => {
+      if (d.exists && d.data()) {
+        poPolicy = Object.assign(JSON.parse(JSON.stringify(PO_POLICY_DEFAULT)), d.data());
+      } else {
+        poPolicy = JSON.parse(JSON.stringify(PO_POLICY_DEFAULT));
+      }
+      if (currentStructuredKind === 'card_expense') renderStructuredContent();
+    }, err => {
+      console.warn('po_policy sync error, using default:', err);
+    });
+
     // 구매 벤더 목록 (Admin이 화면에서 편집) — 실시간 구독
     db.collection('meta').doc(VENDOR_ID).onSnapshot(d => {
       if (d.exists && d.data() && Array.isArray(d.data().vendors)) {
@@ -1370,7 +1422,9 @@ async function sendEmail(toId, doc, action, comment) {
         login_url: window.location.href.split('?')[0] + (IS_KR ? '?branch=kr' : ''),
         // Amazon 구매 요청 승인 알림에만 추가 — 메일에서 바로 결제 진행 가능 (일반 벤더는 제외)
         is_amazon_purchase: isAmazonDoc(doc),
-        amazon_link: (doc.structuredData && doc.structuredData.link) || ''
+        amazon_link: (doc.structuredData && doc.structuredData.link) || '',
+        // 비용청구 사전승인 경고 (사전승인 없음 / 예상액 초과) — 서버가 빨간 박스로 표시
+        warnings: preApprovalWarnings(doc)
       })
     });
     if (!res.ok) {
@@ -1610,12 +1664,144 @@ function isAmazonDoc(doc) {
   if (!sd || sd.kind !== 'purchase_request') return false;
   return isAmazonVendor(sd.vendor);
 }
+// 등록 벤더 외 매장(아무 매장)도 사전승인 대상이므로 "기타 / 직접 입력" 옵션 제공.
+// selected가 목록에 없으면(직접 입력한 매장명) __other__ 선택 상태로 렌더.
 function vendorOptions(selected) {
+  const known = !selected || vendorList.some(v => v.name === selected);
   return '<option value="">— 선택 / Select Vendor —</option>' +
     vendorList.map(v => {
       const n = (v.name || '').replace(/"/g, '&quot;');
       return `<option value="${n}"${v.name === selected ? ' selected' : ''}>${v.name}</option>`;
+    }).join('') +
+    `<option value="__other__"${known ? '' : ' selected'}>기타 매장 / Other (직접 입력)</option>`;
+}
+
+// ── 사전승인(구매요청) 정책 ──
+// 물리 카드 매장 결제는 "구매요청 승인 → 결제 → 비용청구(PO 선택+영수증)" 순서가 원칙.
+// 면제: 카테고리(주유·식비·통행료/주차·차량유지) 또는 소액(exemptAmount 이하)은 PO 없이도 경고 없음.
+// 그 외 PO 없이 올리면 사유 필수 + ⚠️ 사전승인 없음 배지 (소프트 강제, 2026-09-10 Tim 확정).
+const PO_POLICY_DEFAULT = IS_KR
+  ? { exemptCategories: ['식비','여비교통비','차량유지비'], exemptAmount: 100000, overagePct: 30 }
+  : { exemptCategories: ['차량유지비','복리후생비(식비)','여비교통비'], exemptAmount: 100, overagePct: 30 };
+let poPolicy = JSON.parse(JSON.stringify(PO_POLICY_DEFAULT));
+
+// 정산 완료 여부 — 비용청구로 정산됐거나(settledBy) Amazon 결제액 갱신 완료
+function isPoSettled(doc) {
+  return !!(doc && (doc.settledBy || (doc.history || []).some(h => h.action === 'amount_updated')));
+}
+// 비용청구에서 선택 가능한 내 구매요청: 승인됨 + Amazon 아님 + 자산 미반영(신규 흐름) + 미정산
+// (현재 편집 중인 비용청구가 이미 물고 있는 PO는 정산됐어도 포함 — 재편집 시 선택 유지)
+function poCandidates(keepDocId) {
+  return docs.filter(d => d.status === 'approved'
+    && sameId(d.requesterId, currentUser.id)
+    && d.structuredData && d.structuredData.kind === 'purchase_request'
+    && !isAmazonDoc(d)
+    && (!d.assetTxId)
+    && (!isPoSettled(d) || (keepDocId && d.id === keepDocId)))
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+function poOptions(selectedId) {
+  const list = poCandidates(selectedId);
+  return `<option value="">— 구매요청 없음 / No pre-approval —</option>` +
+    list.map(d => {
+      const sd = d.structuredData || {};
+      const label = `${d.docNo} · ${escHtml(d.title)} · ${escHtml(sd.vendor||'')} · ${fmtCUR(sd.amount||0)}`;
+      return `<option value="${d.id}"${d.id === selectedId ? ' selected' : ''}>${label}</option>`;
     }).join('');
+}
+// 비용청구 사전승인 판정: {mode:'po'|'exempt'|'none', exemptReason, overagePct}
+function evalPreApproval(sd) {
+  sd = sd || {};
+  const amount = parseFloat(sd.amount) || 0;
+  if (sd.poDocId) {
+    const est = parseFloat(sd.poAmount) || 0;
+    const over = est > 0 ? Math.round((amount - est) / est * 100) : 0;
+    return { mode: 'po', overagePct: over, isOver: est > 0 && over > (poPolicy.overagePct || 0) };
+  }
+  if (sd.category && (poPolicy.exemptCategories || []).includes(sd.category)) return { mode: 'exempt', exemptReason: '카테고리 면제 (' + sd.category + ')' };
+  if (amount > 0 && amount <= (poPolicy.exemptAmount || 0)) return { mode: 'exempt', exemptReason: '소액 면제 (' + fmtCUR(poPolicy.exemptAmount) + ' 이하)' };
+  return { mode: 'none' };
+}
+// 문서에 붙는 사전승인 배지 (목록/상세 공통). 비용청구(card_expense) 외엔 빈 문자열
+function preApprovalBadge(doc) {
+  const sd = doc && doc.structuredData;
+  if (!sd || sd.kind !== 'card_expense' || !sd.preApproval) return '';
+  let h = '';
+  if (sd.preApproval === 'none') {
+    h += ` <span class="status-badge status-rejected" style="font-size:0.65rem;padding:0.15rem 0.4rem;" title="구매요청(사전승인) 없이 결제한 건 — 사유: ${escHtml(sd.noPoReason||'')}">⚠️ ${IS_KR?'사전승인 없음':'No Pre-approval'}</span>`;
+  } else if (sd.preApproval === 'po') {
+    const ev = evalPreApproval(sd);
+    if (ev.isOver) h += ` <span class="status-badge status-pending" style="font-size:0.65rem;padding:0.15rem 0.4rem;" title="구매요청 예상액 ${fmtCUR(sd.poAmount)} 대비 초과">📈 +${ev.overagePct}%</span>`;
+  }
+  return h;
+}
+// 상세 모달 "사전승인" 행 — 비용청구 / 매장 구매요청에만
+function preApprovalDetailRow(doc) {
+  const sd = doc && doc.structuredData;
+  if (!sd) return '';
+  const label = IS_KR ? '사전승인' : 'Pre-approval';
+  if (sd.kind === 'card_expense' && sd.preApproval) {
+    let val = '';
+    if (sd.preApproval === 'po') {
+      const ev = evalPreApproval(sd);
+      val = `<span style="color:#10b981;">✓ ${escHtml(sd.poDocNo)}</span> <span style="color:var(--mid);">(예상 ${fmtCUR(sd.poAmount)} → 실제 ${fmtCUR(sd.amount)})</span>` +
+            (ev.isOver ? ` <span class="status-badge status-pending" style="font-size:0.65rem;">📈 +${ev.overagePct}% 초과</span>` : '');
+    } else if (sd.preApproval === 'exempt') {
+      val = `<span style="color:var(--mid);">면제 — ${escHtml(evalPreApproval(sd).exemptReason || '')}</span>`;
+    } else {
+      val = `<span class="status-badge status-rejected" style="font-size:0.7rem;">⚠️ ${IS_KR?'사전승인 없음':'No Pre-approval'}</span> <span style="color:var(--light);">사유: ${escHtml(sd.noPoReason || '(미기재)')}</span>`;
+    }
+    return `<div class="detail-row"><div class="detail-label">${label}</div><div class="detail-value">${val}</div></div>`;
+  }
+  if (sd.kind === 'purchase_request' && !isAmazonDoc(doc) && doc.status === 'approved' && !doc.assetTxId) {
+    const val = doc.settledBy
+      ? `<span style="color:#10b981;">✓ 정산 완료 — 비용청구 ${escHtml(doc.settledBy.docNo || '')}</span>`
+      : `<span style="color:#fbbf24;">🛍 구매대기 — 결제 후 비용청구에서 이 PO(${escHtml(doc.docNo)})를 선택해 정산</span>`;
+    return `<div class="detail-row"><div class="detail-label">${IS_KR?'정산':'Settlement'}</div><div class="detail-value">${val}</div></div>`;
+  }
+  return '';
+}
+// 메일 경고문 (서버 /send-email 의 warnings 박스)
+function preApprovalWarnings(doc) {
+  const sd = doc && doc.structuredData;
+  if (!sd || sd.kind !== 'card_expense') return [];
+  const w = [];
+  if (sd.preApproval === 'none') w.push('⚠️ 사전승인(구매요청) 없이 결제한 건입니다. 사유: ' + (sd.noPoReason || '(미기재)'));
+  if (sd.preApproval === 'po') {
+    const ev = evalPreApproval(sd);
+    if (ev.isOver) w.push(`📈 구매요청 ${sd.poDocNo} 예상액 ${fmtCUR(sd.poAmount)} 대비 +${ev.overagePct}% 초과 (실제 ${fmtCUR(sd.amount)})`);
+  }
+  return w;
+}
+
+// ── 사전승인 정책 설정 (Admin) ──
+function openPoPolicyModal() {
+  if (!currentUser || currentUser.role !== 'Admin') { alert('관리자(Admin)만 설정할 수 있습니다.'); return; }
+  const selected = poPolicy.exemptCategories || [];
+  // 비용청구에서 고를 수 있는 카테고리(화이트리스트) 기준 + 이미 면제로 저장된 항목
+  const base = (categoryWhitelist.card_expense && categoryWhitelist.card_expense.length) ? categoryWhitelist.card_expense : (assetCategories || []);
+  const all = Array.from(new Set([...base, ...selected])).sort((a, b) => a.localeCompare(b, 'ko'));
+  document.getElementById('ppCategoryList').innerHTML = all.map(c => `
+    <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;cursor:pointer;padding:0.2rem 0;">
+      <input type="checkbox" class="pp-cat-box" value="${c}"${selected.includes(c)?' checked':''} style="width:auto;margin:0;cursor:pointer;">
+      <span>${c}</span>
+    </label>`).join('');
+  document.getElementById('ppExemptAmount').value = fmtAmt(poPolicy.exemptAmount || 0);
+  document.getElementById('ppOveragePct').value = poPolicy.overagePct != null ? poPolicy.overagePct : 30;
+  document.getElementById('ppCurLabel').textContent = CUR_CODE;
+  document.getElementById('poPolicyModal').classList.add('open');
+}
+function savePoPolicy() {
+  if (!currentUser || currentUser.role !== 'Admin') { alert('관리자(Admin)만 가능합니다.'); return; }
+  const exemptCategories = Array.from(document.querySelectorAll('#ppCategoryList .pp-cat-box:checked')).map(b => b.value);
+  const exemptAmount = parseFormattedNumber(document.getElementById('ppExemptAmount').value);
+  const overagePct = parseInt(document.getElementById('ppOveragePct').value) || 0;
+  if (exemptAmount < 0 || overagePct < 0) { alert('금액/퍼센트는 0 이상이어야 합니다.'); return; }
+  poPolicy = { exemptCategories, exemptAmount, overagePct };
+  db.collection('meta').doc(PO_POLICY_ID)
+    .set({ exemptCategories, exemptAmount, overagePct, updated_at: Date.now(), updated_by: currentUser.id })
+    .then(() => { closeModal('poPolicyModal'); alert('✓ 저장되었습니다. 전 직원에게 즉시 반영됩니다.'); })
+    .catch(e => alert('저장 오류: ' + e.message));
 }
 
 // 카테고리 설정 모달에 노출할 정형 양식 목록 (문서종류)
@@ -1772,6 +1958,18 @@ function renderCardExpenseForm(d) {
       <div style="font-size:0.9rem;color:var(--primary);font-weight:600;margin-bottom:0.8rem;">💸 비용청구 / Expense ${IS_KR?'':'(자산관리 자동 입력)'}</div>
       ${IS_KR?`<div style="font-size:0.72rem;color:var(--text-dim);background:rgba(236,72,153,0.07);border-left:3px solid #ec4899;padding:8px 10px;border-radius:4px;margin-bottom:0.8rem;">💳 결제수단이 <strong>법인카드·아마존카드</strong>이면 이 건은 자산관리에 <strong>바로 반영되지 않고</strong>, 월말 <strong>「법인카드 월정산」</strong> 결재에서 한 번에 정산됩니다. <strong>법인통장</strong> 직접결제 건만 즉시 자산 반영됩니다.</div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+        <!-- ★ 사전승인(구매요청) 연결 — 매장 카드결제는 구매요청 승인 후 결제가 원칙 -->
+        <div style="grid-column:1/3;">
+          <label class="field-label">사전승인 구매요청 / Pre-approved Purchase Request (PO)</label>
+          <select class="field-input" id="se_po" onchange="onExpensePoChange()">${poOptions(d.poDocId||'')}</select>
+          <input type="hidden" id="se_poDocNo" value="${(d.poDocNo||'').replace(/"/g,'&quot;')}"/>
+          <input type="hidden" id="se_poAmount" value="${d.poAmount||''}"/>
+          <div id="se_po_status" style="margin-top:0.4rem;font-size:0.74rem;line-height:1.55;"></div>
+          <div id="se_noPo_wrap" style="display:none;margin-top:0.5rem;">
+            <label class="field-label" style="color:var(--red);">⚠️ 사전승인 없이 결제한 사유 * / Reason for purchasing without pre-approval</label>
+            <textarea class="field-input-white" id="se_noPoReason" oninput="renderStructuredContent()" style="min-height:48px;" placeholder="예) 현장 긴급 자재 부족으로 즉시 구매">${escHtml(d.noPoReason||'')}</textarea>
+          </div>
+        </div>
         <div><label class="field-label">사용일자 *</label><input class="field-input" type="date" id="se_date" value="${d.date||''}" oninput="renderStructuredContent()"/></div>
         <div><label class="field-label">금액 (${CUR_CODE}) *</label><input class="field-input" type="text" inputmode="decimal" id="se_amount" value="${d.amount?fmtAmt(d.amount):''}" oninput="formatNumberInput(this,${CUR_DEC});renderStructuredContent()" placeholder="${CUR_PH}"/></div>
         <div><label class="field-label">사용처 / Vendor *</label><input class="field-input" type="text" id="se_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="Amazon, Home Depot, Chevron 등"/></div>
@@ -1954,13 +2152,14 @@ function renderAmazonPurchaseForm(d) {
       <div style="margin-bottom:0.8rem;">
         <div id="ap_form_title" style="font-size:0.95rem;color:#ff9900;font-weight:700;margin-bottom:4px;">🛒 ${dv} 구매 요청 / Purchase Request</div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:0.75rem;color:var(--text-dim);flex-wrap:wrap;">
-          <span>✅ 승인 시 자산관리 자동 입력</span>
+          <span id="ap_sync_note">${isAmz ? '✅ 승인 시 자산관리 자동 입력' : '📋 승인 시 PO(사전승인) 발급 → 구매 후 <strong>비용청구</strong>에서 이 PO를 선택해 영수증과 함께 정산 (자산관리는 그때 실제 금액으로 반영)'}</span>
           <span style="white-space:nowrap;">PO No: <span style="font-family:var(--mono);color:#ff9900;font-weight:700;">${poDisplay}</span></span>
         </div>
       </div>
       <div style="font-size:0.72rem;color:var(--text-dim);background:rgba(255,153,0,0.08);border-left:3px solid #ff9900;padding:6px 10px;border-radius:4px;margin-bottom:0.7rem;">💡 위 <strong>TITLE</strong> 입력란이 품목명이 됩니다 (예: "Dell 27인치 모니터")</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div style="grid-column:1/3;"><label class="field-label">사용처 / Vendor *</label><select class="field-input" id="ap_vendor" onchange="onPurchaseVendorChange()">${vendorOptions(dv)}</select></div>
+        <div id="ap_vendor_other_wrap" style="grid-column:1/3;display:${findVendor(dv)?'none':''};"><label class="field-label">매장명 직접 입력 / Store name *</label><input class="field-input" type="text" id="ap_vendor_other" value="${findVendor(dv)?'':(dv||'').replace(/"/g,'&quot;')}" oninput="onPurchaseVendorChange()" placeholder="예: Harbor Freight, Costco, 동네 철물점"/></div>
         <div id="ap_amazon_only" style="grid-column:1/3;display:${isAmz?'':'none'};">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
             <label class="field-label" style="margin-bottom:0;">Amazon 링크</label>
@@ -1968,7 +2167,7 @@ function renderAmazonPurchaseForm(d) {
           </div>
           <input class="field-input" type="url" id="ap_link" value="${(d.link||'').replace(/"/g,'&quot;')}" oninput="renderStructuredContent()" placeholder="https://www.amazon.com/... (또는 위 버튼 클릭)"/>
         </div>
-        <div id="ap_generic_note" style="grid-column:1/3;display:${isAmz?'none':''};font-size:0.72rem;color:var(--text-dim);background:rgba(99,102,241,0.06);border-left:3px solid #6366f1;padding:8px 10px;border-radius:4px;">💡 <strong>Pro(상업)계정</strong>이면 승인 후 발급되는 PO 번호를 체크아웃에 입력해 결제하세요. <strong>매장 카드결제</strong> 건은 구매 후 영수증을 이 결재에 첨부하면 됩니다.</div>
+        <div id="ap_generic_note" style="grid-column:1/3;display:${isAmz?'none':''};font-size:0.72rem;color:var(--text-dim);background:rgba(99,102,241,0.06);border-left:3px solid #6366f1;padding:8px 10px;border-radius:4px;">💡 승인되면 PO 번호가 발급됩니다. <strong>Pro(상업)계정</strong>은 체크아웃에 PO 입력. <strong>매장 카드결제</strong>는 결제 후 <strong>비용청구</strong>를 올리면서 "사전승인 구매요청"에서 이 PO를 선택하고 영수증을 첨부하세요 — 그때 자산관리에 실제 금액으로 반영됩니다.</div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="ap_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'purchase_request')}</select></div>
         <div><label class="field-label">프로젝트 *</label><select class="field-input" id="ap_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
         <div><label class="field-label">수량</label><input class="field-input" type="number" min="1" step="1" id="ap_qty" value="${d.qty||1}" oninput="renderStructuredContent()"/></div>
@@ -1989,14 +2188,24 @@ function renderAmazonPurchaseForm(d) {
 }
 
 // 구매요청 벤더 변경 시 — Amazon 전용 UI 토글 + 결제수단 기본값 + 헤더/미리보기 갱신
+// 현재 구매요청 폼의 벤더명 (드롭다운 "기타"면 직접 입력값)
+function purchaseVendorValue() {
+  const sel = document.getElementById('ap_vendor');
+  if (!sel) return '';
+  return sel.value === '__other__' ? (v('ap_vendor_other') || '').trim() : sel.value;
+}
 function onPurchaseVendorChange() {
   const sel = document.getElementById('ap_vendor');
   if (!sel) return;
-  const name = sel.value;
-  const isAmz = isAmazonVendor(name);
+  const other = sel.value === '__other__';
+  const ow = document.getElementById('ap_vendor_other_wrap'); if (ow) ow.style.display = other ? '' : 'none';
+  const name = purchaseVendorValue();
+  // "기타" 선택 후 아직 매장명 미입력이면 Amazon(레거시 빈값) 취급 방지
+  const isAmz = other ? false : isAmazonVendor(name);
   const az = document.getElementById('ap_amazon_only'); if (az) az.style.display = isAmz ? '' : 'none';
   const gn = document.getElementById('ap_generic_note'); if (gn) gn.style.display = isAmz ? 'none' : '';
   const wz = document.getElementById('ap_amount_warn_amz'); if (wz) wz.style.display = isAmz ? '' : 'none';
+  const sn = document.getElementById('ap_sync_note'); if (sn) sn.innerHTML = isAmz ? '✅ 승인 시 자산관리 자동 입력' : '📋 승인 시 PO(사전승인) 발급 → 구매 후 <strong>비용청구</strong>에서 이 PO를 선택해 영수증과 함께 정산 (자산관리는 그때 실제 금액으로 반영)';
   const h = document.getElementById('ap_form_title'); if (h) h.textContent = `🛒 ${name || ''} 구매 요청 / Purchase Request`.replace('🛒  ', '🛒 ');
   // 결제수단 미선택 시 벤더에 맞는 기본값 자동 지정 (사용자가 이미 골랐으면 유지)
   const pm = document.getElementById('ap_paymentMethod');
@@ -2012,11 +2221,17 @@ function renderStructuredContent() {
   if (kind === 'card_expense') {
     const date = v('se_date'), vendor = v('se_vendor'), cat = v('se_category'),
           proj = v('se_project'), amount = v('se_amount'), purpose = v('se_purpose');
+    const pa = updateExpensePoStatus();   // 사전승인 판정 + 상태 박스/사유칸 토글
+    let paLine = '';
+    if (pa.mode === 'po') paLine = `사전승인: ${v('se_poDocNo')} (예상 ${fmtCUR(v('se_poAmount'))})` + (pa.isOver ? ` ⚠️ 예상액 대비 +${pa.overagePct}% 초과` : '');
+    else if (pa.mode === 'exempt') paLine = `사전승인: 면제 — ${pa.exemptReason}`;
+    else paLine = `사전승인: ⚠️ 없음 — 사유: ${v('se_noPoReason') || '(미기재)'}`;
     txt = `사용일자: ${date}
 사용처: ${vendor}
 카테고리: ${cat}
 프로젝트: ${proj}
 금액: ${fmtCUR(amount)}
+${paLine}
 
 [사용 목적]
 ${purpose || ''}`;
@@ -2080,15 +2295,15 @@ ${payeeLines}
 ${note || ''}`;
   } else if (kind === 'purchase_request') {
     const item = (document.getElementById('docTitle')?.value || '').trim();
-    const vendor = v('ap_vendor') || 'Amazon';
-    const isAmz = isAmazonVendor(vendor);
+    const vendor = purchaseVendorValue() || (v('ap_vendor') === '__other__' ? '' : 'Amazon');
+    const isAmz = v('ap_vendor') === '__other__' ? false : isAmazonVendor(vendor);
     const link = v('ap_link'), cat = v('ap_category'),
           proj = v('ap_project'), qty = v('ap_qty')||'1', amount = v('ap_amount'),
           purpose = v('ap_purpose');
     const poDisplay = editingDocId ? (docs.find(x=>x.id===editingDocId)?.docNo || '(제출 시 발급)') : '(제출 시 발급)';
     const footer = isAmz
       ? '* 승인 후 [Amazon 열기 + PO 복사] 버튼으로 PO 번호를 받아 Amazon 체크아웃에 입력하여 결제하세요.'
-      : '* 승인 후 [PO 복사] 버튼으로 PO 번호를 받으세요. Pro(상업)계정은 체크아웃에 PO 입력, 매장 카드결제는 구매 후 영수증을 이 결재에 첨부하세요.';
+      : '* 승인 시 PO(사전승인) 번호가 발급됩니다. 결제 후 [비용청구]를 올리면서 "사전승인 구매요청"에 이 PO를 선택하고 영수증을 첨부하세요. 자산관리에는 그때 실제 금액으로 반영됩니다.';
     txt = `[${vendor} 구매 요청]
 PO No: ${poDisplay}
 사용처: ${vendor}
@@ -2126,6 +2341,49 @@ ${note || ''}
 }
 
 function v(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+
+// ── 비용청구 ↔ 구매요청(PO) 연결 ──
+// PO 선택 시 벤더/카테고리/프로젝트를 구매요청 값으로 채우고(비어 있을 때만 덮어씀 X → 항상 동기화가 직원 실수 방지에 유리), 예상액 보관
+function onExpensePoChange() {
+  const sel = document.getElementById('se_po'); if (!sel) return;
+  const po = docs.find(d => d.id === sel.value);
+  const sd = (po && po.structuredData) || null;
+  document.getElementById('se_poDocNo').value = po ? po.docNo : '';
+  document.getElementById('se_poAmount').value = sd ? (sd.amount || '') : '';
+  if (sd) {
+    const setIf = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    setIf('se_vendor', sd.vendor);
+    setIf('se_project', sd.project);
+    // 카테고리는 비용청구 화이트리스트에 있을 때만 (없으면 직원이 직접 선택)
+    const cat = document.getElementById('se_category');
+    if (cat && sd.category && [...cat.options].some(o => o.value === sd.category)) cat.value = sd.category;
+    setIf('se_paymentMethod', sd.paymentMethod);
+    const amt = document.getElementById('se_amount');
+    if (amt && !amt.value && sd.amount) amt.value = fmtAmt(sd.amount);   // 실제 결제액은 직원이 영수증 보고 수정
+  }
+  renderStructuredContent();
+}
+// 사전승인 상태 박스 + "사유" 칸 표시/숨김. 판정 결과 반환
+function updateExpensePoStatus() {
+  const box = document.getElementById('se_po_status');
+  const wrap = document.getElementById('se_noPo_wrap');
+  const sd = { poDocId: v('se_po'), poDocNo: v('se_poDocNo'), poAmount: v('se_poAmount'),
+               category: v('se_category'), amount: parseFormattedNumber(v('se_amount')) };
+  const ev = evalPreApproval(sd);
+  if (!box) return ev;
+  if (ev.mode === 'po') {
+    box.innerHTML = `<div style="color:#10b981;background:rgba(16,185,129,0.08);border-left:3px solid #10b981;padding:6px 10px;border-radius:4px;">✓ 사전승인 <strong>${sd.poDocNo}</strong> 연결됨 · 예상액 ${fmtCUR(sd.poAmount)}` +
+      (ev.isOver ? `<div style="color:#fbbf24;margin-top:4px;">📈 예상액 대비 <strong>+${ev.overagePct}%</strong> 초과 — 결재자에게 경고가 표시됩니다 (기준 +${poPolicy.overagePct}%)</div>` : '') + `</div>`;
+    if (wrap) wrap.style.display = 'none';
+  } else if (ev.mode === 'exempt') {
+    box.innerHTML = `<div style="color:var(--text-dim);background:rgba(99,102,241,0.06);border-left:3px solid #6366f1;padding:6px 10px;border-radius:4px;">ℹ️ 사전승인 면제 — ${ev.exemptReason}. 사유 입력 없이 상신 가능합니다.</div>`;
+    if (wrap) wrap.style.display = 'none';
+  } else {
+    box.innerHTML = `<div style="color:var(--red);background:rgba(239,68,68,0.08);border-left:3px solid var(--red);padding:6px 10px;border-radius:4px;">⚠️ <strong>사전승인(구매요청) 없는 결제</strong>입니다. 원칙은 <strong>구매요청 승인 → 결제 → 비용청구</strong> 순서입니다. 아래에 사유를 입력하면 상신은 가능하지만 결재자·메일에 <strong>"⚠️ 사전승인 없음"</strong>이 표시됩니다.<br><span style="color:var(--text-dim);">면제: ${(poPolicy.exemptCategories||[]).join(' · ') || '없음'} / ${fmtCUR(poPolicy.exemptAmount||0)} 이하</span></div>`;
+    if (wrap) wrap.style.display = '';
+  }
+  return ev;
+}
 function fmtNum(n) { const x = parseFloat(String(n).replace(/,/g,'')); return isNaN(x)?'0.00':x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtKRW(n) { const x = parseFloat(String(n).replace(/,/g,'')); return isNaN(x)?'0':Math.round(x).toLocaleString('en-US'); }
 
@@ -2156,9 +2414,15 @@ function collectStructuredData() {
   const kind = currentStructuredKind;
   if (!kind) return null;
   if (kind === 'card_expense') {
-    return { kind, date:v('se_date'), vendor:v('se_vendor'), category:v('se_category'),
+    const base = { kind, date:v('se_date'), vendor:v('se_vendor'), category:v('se_category'),
              project:v('se_project'), amount:parseFormattedNumber(v('se_amount')), purpose:v('se_purpose'),
-             paymentMethod:v('se_paymentMethod') };
+             paymentMethod:v('se_paymentMethod'),
+             poDocId:v('se_po')||'', poDocNo:v('se_poDocNo')||'', poAmount:parseFormattedNumber(v('se_poAmount'))||0,
+             noPoReason:(v('se_noPoReason')||'').trim() };
+    const ev = evalPreApproval(base);
+    base.preApproval = ev.mode;                       // 'po' | 'exempt' | 'none'
+    if (ev.mode !== 'none') base.noPoReason = '';     // 면제/PO 연결이면 사유 불필요
+    return base;
   }
   if (kind === 'payroll') {
     const currency = (document.querySelector('input[name="pr_currency"]:checked')?.value) || 'KRW';
@@ -2184,7 +2448,9 @@ function collectStructuredData() {
   }
   if (kind === 'purchase_request') {
     const title = (document.getElementById('docTitle')?.value || '').trim();
-    return { kind, vendor:v('ap_vendor')||'Amazon', item:title, link:v('ap_link'), category:v('ap_category'),
+    const vendorSel = v('ap_vendor');
+    const vendor = vendorSel === '__other__' ? purchaseVendorValue() : (vendorSel || 'Amazon');
+    return { kind, vendor, item:title, link:v('ap_link'), category:v('ap_category'),
              project:v('ap_project'), qty:parseInt(v('ap_qty'))||1,
              amount:parseFormattedNumber(v('ap_amount')), purpose:v('ap_purpose'),
              paymentMethod:v('ap_paymentMethod') };
@@ -2201,6 +2467,7 @@ function validateStructured() {
   const d = collectStructuredData(); if (!d) return null;
   if (d.kind === 'card_expense') {
     if (!d.date || !d.vendor || !d.category || !d.project || !d.amount || !d.purpose) return '모든 필드(사용일자/사용처/카테고리/프로젝트/금액/사용목적)를 입력하세요.';
+    if (d.preApproval === 'none' && !d.noPoReason) return '사전승인(구매요청) 없이 결제한 건입니다.\n"사전승인 없이 결제한 사유"를 입력하거나, 해당 구매요청을 선택하세요.\n\nThis expense has no pre-approved Purchase Request. Enter the reason or select the PO.';
   } else if (d.kind === 'payroll') {
     if (!d.startDate || !d.endDate || !d.vendor || !d.category || !d.project) return '필수 항목(기간/업체/카테고리/프로젝트)을 입력하세요.';
     if (!IS_KR && d.currency === 'KRW' && !d.rate) return '환율을 입력하세요 (KRW 모드).';
@@ -2502,6 +2769,14 @@ function statusBadgeFor(doc) {
   if (doc.status !== 'rejected' && hasBeenRejected(doc)) {
     html += ` <span class="status-badge status-rejected" style="font-size:0.65rem;padding:0.15rem 0.4rem;margin-left:0.3rem;opacity:0.8;" title="이전에 반려된 적 있음 / Previously Rejected">↻ ${IS_KR?'반려이력':'Rejected'}</span>`;
   }
+  // ★ 비용청구: 사전승인 없음 / 예상액 초과 배지
+  html += preApprovalBadge(doc);
+  // ★ 매장 구매요청(PO, Amazon 아님): 승인 후 정산 여부
+  if (doc.status === 'approved' && doc.structuredData && doc.structuredData.kind === 'purchase_request' && !isAmazonDoc(doc) && !doc.assetTxId) {
+    html += isPoSettled(doc)
+      ? ` <span class="status-badge status-approved" style="font-size:0.65rem;padding:0.15rem 0.4rem;" title="비용청구 ${escHtml((doc.settledBy&&doc.settledBy.docNo)||'')}로 정산됨">✓ ${IS_KR?'정산완료':'Settled'}</span>`
+      : ` <span class="status-badge status-pending" style="font-size:0.65rem;padding:0.15rem 0.4rem;" title="구매 후 비용청구로 정산 필요">🛍 ${IS_KR?'구매대기':'To Purchase'}</span>`;
+  }
   return html;
 }
 function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-US', {year:'numeric', month:'short', day:'numeric'}); }
@@ -2519,7 +2794,7 @@ function renderTable(tbodyId, data, mode) {
     if (mode === 'pending') {
       const myStep = (doc.approvers||[]).findIndex(a => a.id === currentUser.id);
       return `<tr>
-        <td>${doc.docNo}</td><td>${doc.title}</td><td>${doc.type}</td>
+        <td>${doc.docNo}</td><td>${doc.title}${preApprovalBadge(doc)}</td><td>${doc.type}</td>
         <td>${getUserName(doc.requesterId)}</td>
         <td><span class="status-badge status-${doc.priority==='Urgent'?'rejected':doc.priority==='High'?'pending':'draft'}">${doc.priority}</span></td>
         <td>Step ${myStep+1} / ${doc.approvers.length}</td>
@@ -2557,8 +2832,8 @@ function buildActions(doc, mode) {
   if (mode === 'mine' && (doc.status === 'rejected' || doc.status === 'draft') && sameId(doc.requesterId, currentUser.id)) {
     b += ` <button class="btn-sm" style="background:var(--blue);color:white;" onclick="editDoc('${doc.id}')">Edit</button>`;
   }
-  // 결제 완료 상태 판정 (history에 amount_updated가 있으면 = 직원이 실제 결제 후 금액 확인 완료)
-  const purchaseComplete = (doc.history || []).some(h => h.action === 'amount_updated');
+  // 결제 완료 상태 판정 — Amazon: 결제액 갱신(amount_updated) / 매장 PO: 비용청구로 정산(settledBy)
+  const purchaseComplete = isPoSettled(doc);
 
   // ★ 구매 요청 — 결제 완료 전에는 PO 복사 버튼(벤더별), 완료 후에는 "✓ 결제 완료" 배지
   if (mode === 'mine'
@@ -2566,13 +2841,15 @@ function buildActions(doc, mode) {
       && sameId(doc.requesterId, currentUser.id)
       && doc.structuredData && doc.structuredData.kind === 'purchase_request') {
     if (purchaseComplete) {
-      b += ` <span style="display:inline-block;background:rgba(16,185,129,0.15);color:#10b981;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:700;border:1px solid #10b981;">✓ 결제 완료</span>`;
+      b += ` <span style="display:inline-block;background:rgba(16,185,129,0.15);color:#10b981;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:700;border:1px solid #10b981;">✓ ${doc.settledBy ? '정산 완료' : '결제 완료'}</span>`;
     } else if (isAmazonDoc(doc)) {
       b += ` <button class="btn-sm" style="background:#ff9900;color:#000;font-weight:600;" onclick="openAmazonWithPO('${doc.docNo}','${doc.structuredData.link?encodeURIComponent(doc.structuredData.link):''}')">🛒 Amazon (PO 복사)</button>`;
     } else {
       const ven = findVendor(doc.structuredData.vendor);
       const url = (ven && ven.url) ? encodeURIComponent(ven.url) : '';
       b += ` <button class="btn-sm" style="background:#6366f1;color:#fff;font-weight:600;" onclick="copyPoNumber('${doc.docNo}','${url}')">📋 PO 복사</button>`;
+      // 신규 흐름(자산 미반영 PO): 결제 후 이 PO를 물고 비용청구 작성
+      if (!doc.assetTxId) b += ` <button class="btn-sm" style="background:#10b981;color:#fff;font-weight:600;" onclick="newExpenseFromPo('${doc.id}')">🧾 ${IS_KR?'비용청구 작성':'File Expense'}</button>`;
     }
   }
   // ★ 결제액 갱신 — Amazon 구매(purchase_request)에만 노출. 다른 정형 결재는 영수증·청구서 금액이 곧 최종액
@@ -2589,6 +2866,32 @@ function buildActions(doc, mode) {
     b += ` <button class="btn-sm btn-sm-outline" onclick="deleteDoc('${doc.id}')">Delete</button>`;
   }
   return b;
+}
+
+// ── 승인된 매장 구매요청(PO) → 비용청구 새 문서 열기 (PO 자동 선택 + 벤더/카테고리/프로젝트 채움) ──
+function newExpenseFromPo(poDocId) {
+  const po = docs.find(d => d.id === poDocId); if (!po) return;
+  const tmpl = templates.find(t => t.template_kind === 'card_expense' && !t.archived);
+  if (!tmpl) { alert('비용청구 템플릿을 찾을 수 없습니다. 관리자에게 문의하세요.'); return; }
+  editingDocId = null;
+  showPage('new');
+  setTimeout(() => {
+    const dt = document.getElementById('docType');
+    if (dt) { dt.value = tmpl.id; try { applyApprovalTemplate(tmpl); } catch(e) { console.warn('apply template err', e); } }
+    const t = document.getElementById('docTitle');
+    if (t) t.value = `[정산] ${po.title}`;
+    const sd = po.structuredData || {};
+    showStructuredPanel('card_expense', {
+      date: new Date().toISOString().slice(0,10),
+      vendor: sd.vendor, category: sd.category, project: sd.project, paymentMethod: sd.paymentMethod,
+      purpose: `구매요청 ${po.docNo} 정산\n${sd.purpose || ''}`.trim(),
+      poDocId: po.id, poDocNo: po.docNo, poAmount: sd.amount || 0
+    });
+    const sel = document.getElementById('se_po');
+    if (sel) { sel.value = po.id; onExpensePoChange(); }
+    renderStructuredContent();
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e) {}
+  }, 60);
 }
 
 // ── 사후 결제액 갱신 (실제 결제액 확인 후 자산관리 함께 보정) ──
@@ -3199,7 +3502,7 @@ function viewDoc(docId) {
               : h.action==='info_answered'?'h-info_answered'
               : h.action==='submitted'?'h-pending':'h-draft';
     const _HL = {submitted:'상신',approved:'승인',rejected:'반려',resubmitted:'재상신',draft:'임시저장',
-                 info_requested:'질의',info_answered:'답변',commented:'의견',amount_updated:'결제액 갱신'};
+                 info_requested:'질의',info_answered:'답변',commented:'의견',amount_updated:'결제액 갱신',settled:'정산'};
     const label = IS_KR ? (_HL[h.action] || h.action)
               : h.action==='resubmitted' ? 'RESUBMITTED'
               : h.action==='info_requested' ? 'INFO REQUESTED'
@@ -3237,6 +3540,7 @@ function viewDoc(docId) {
     <div class="detail-row"><div class="detail-label">Type</div><div class="detail-value">${doc.type}</div></div>
     <div class="detail-row"><div class="detail-label">Priority</div><div class="detail-value">${doc.priority}</div></div>
     <div class="detail-row"><div class="detail-label">Requester</div><div class="detail-value">${getUserName(doc.requesterId)}</div></div>
+    ${preApprovalDetailRow(doc)}
     <div class="detail-row" style="flex-direction:column;gap:0.8rem;">
       <div class="detail-label">Approval Line</div>${progressHtml(doc)}${approverDetail}
     </div>
@@ -3332,12 +3636,19 @@ async function doApprove(action) {
 
   // ★ 최종 승인 & 정형 데이터 있음 → 자산관리 자동 sync
   let syncMsg = '';
-  if (doc.status === 'approved' && doc.structuredData && doc.structuredData.kind && !doc.assetTxId
+  if (doc.status === 'approved' && doc.structuredData && doc.structuredData.kind === 'purchase_request'
+      && !isAmazonDoc(doc) && !doc.assetTxId) {
+    // ★ 매장 구매요청(Amazon 아님): 승인 = PO(사전승인) 발급만. 자산관리는 결제 후 비용청구 승인 시 실제 금액으로 반영
+    doc.syncStatus = 'po_only';
+    await saveDoc(doc); saveData();
+    syncMsg = '\n📋 PO 발급 완료 — 자산관리는 구매 후 비용청구(영수증) 승인 시 반영됩니다';
+  } else if (doc.status === 'approved' && doc.structuredData && doc.structuredData.kind && !doc.assetTxId
       && shouldSkipAssetSync(doc)) {
     // KR: 법인/아마존카드로 결제한 비용청구는 건별 자산 반영 안 함 (월정산으로 일괄) — 승인/기록은 유지
     doc.syncStatus = 'skipped_card';
     await saveDoc(doc); saveData();
     syncMsg = '\n💳 법인카드 사용건 — 자산 미반영 (월정산 결재로 일괄 처리됩니다)';
+    syncMsg += await settleLinkedPo(doc);
   } else if (doc.status === 'approved' && doc.structuredData && doc.structuredData.kind && !doc.assetTxId) {
     const syncResult = await syncDocToAssetManager(doc);
     if (syncResult.ok) {
@@ -3352,6 +3663,8 @@ async function doApprove(action) {
       await saveDoc(doc); saveData();
       syncMsg = '\n⚠️ 자산관리 자동 입력 실패: ' + (syncResult.error || '확인 필요');
     }
+    // 비용청구가 구매요청(PO)을 물고 있으면 그 PO를 정산 완료 처리 (sync 실패해도 결재상 정산은 완료)
+    syncMsg += await settleLinkedPo(doc);
   }
 
   if (action === 'approve' && doc.status === 'approved') alert((IS_KR?'✓ 최종 결재 완료!':'✓ All steps approved!') + syncMsg);
@@ -3446,6 +3759,26 @@ function shouldSkipAssetSync(doc) {
   return ['법인카드','아마존카드'].includes(sd.paymentMethod);
 }
 
+// ── 비용청구 최종 승인 → 연결된 매장 구매요청(PO) 정산 완료 표시 ──
+async function settleLinkedPo(doc) {
+  const sd = doc && doc.structuredData;
+  if (!sd || sd.kind !== 'card_expense' || !sd.poDocId) return '';
+  const po = docs.find(d => d.id === sd.poDocId);
+  if (!po || po.settledBy) return '';
+  try {
+    const updated = { ...po,
+      settledBy: { docId: doc.id, docNo: doc.docNo, amount: sd.amount, at: Date.now() },
+      history: [ ...(po.history || []),
+        { action: 'settled', by: currentUser.id, at: Date.now(),
+          comment: `비용청구 ${doc.docNo}로 정산 (예상 ${fmtCUR(sd.poAmount||0)} → 실제 ${fmtCUR(sd.amount||0)})` } ] };
+    await saveDoc(updated);
+    return `\n✓ 구매요청 ${po.docNo} 정산 완료 처리`;
+  } catch(e) {
+    console.warn('settleLinkedPo failed', e);
+    return `\n⚠️ 구매요청 ${po.docNo} 정산 표시 실패 (수동 확인 필요)`;
+  }
+}
+
 // ── 자산관리 자동 입력 (최종 승인 시 호출) ──
 async function syncDocToAssetManager(doc) {
   const sd = doc.structuredData || {};
@@ -3463,6 +3796,7 @@ async function syncDocToAssetManager(doc) {
     payload.project = sd.project;
     payload.amount = sd.amount;
     payload.note = doc.content || '';
+    if (sd.poDocNo) payload.po_no = sd.poDocNo;   // 사전승인 구매요청 번호를 자산 거래에 PO로 연결
   } else if (kind === 'payroll') {
     // 산정기간 종료일이 아닌 승인일을 거래일로 사용 (실제 지급일)
     const approvedAt = (doc.history || []).slice().reverse().find(h => h.action === 'approved');
