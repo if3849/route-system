@@ -1183,7 +1183,12 @@ window.addEventListener('load', function() {
     db.collection(TEMPLATES_COL).onSnapshot(snapshot => {
       templates = [];
       snapshot.forEach(d => templates.push({ id: d.id, ...d.data() }));
-      templates.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      // 표시 순서: sort_order(설정 화면 ▲▼로 지정) 우선, 미지정은 뒤로 + 이름순
+      templates.sort((a, b) => {
+        const ao = (typeof a.sort_order === 'number') ? a.sort_order : 1e9;
+        const bo = (typeof b.sort_order === 'number') ? b.sort_order : 1e9;
+        return ao !== bo ? ao - bo : (a.name || '').localeCompare(b.name || '');
+      });
       templatesLoaded = true;
       if (currentUser) {
         refreshTemplateDropdown();
@@ -3331,16 +3336,25 @@ function renderTemplates() {
     list.innerHTML = '<div style="color:var(--mid);font-size:0.85rem;padding:1rem 0;">등록된 템플릿이 없습니다. 아래 버튼으로 새 템플릿을 만드세요.</div>';
     return;
   }
-  list.innerHTML = templates.map(t => {
+  // 드롭다운에 보이는(archived 아님) 템플릿만, 드롭다운과 같은 순서로. ▲▼로 순서 변경(sort_order 저장)
+  const visible = templates.filter(t => !t.archived);
+  list.innerHTML = visible.map((t, i) => {
     const names = (t.approvers || []).map(id => getUserName(id)).join(' → ') || '—';
     const ccNames = (t.cc || []).map(id => getUserName(id)).join(', ');
     const hasContent = (t.content_template || '').trim().length > 0;
+    const arrowStyle = 'padding:0.2rem 0.5rem;font-size:0.72rem;line-height:1;min-width:0;';
     return `
       <div style="border:1px solid var(--dark3);padding:1rem;margin-bottom:0.6rem;display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;">
+        <div style="display:flex;flex-direction:column;gap:0.2rem;flex-shrink:0;align-items:center;">
+          <button class="btn btn-outline" style="${arrowStyle}" title="위로 / Move up" onclick="moveTemplate('${t.id}',-1)"${i===0?' disabled':''}>▲</button>
+          <span style="font-size:0.7rem;color:var(--mid);font-family:var(--mono);">${i+1}</span>
+          <button class="btn btn-outline" style="${arrowStyle}" title="아래로 / Move down" onclick="moveTemplate('${t.id}',1)"${i===visible.length-1?' disabled':''}>▼</button>
+        </div>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;color:var(--accent);margin-bottom:0.3rem;">
             ${t.name || '(이름 없음)'}
             ${hasContent ? '<span style="margin-left:0.5rem;font-size:0.7rem;color:var(--mid);font-weight:normal;border:1px solid var(--dark3);padding:0.1rem 0.4rem;">📝 본문 양식</span>' : ''}
+            ${t.template_kind ? `<span style="margin-left:0.3rem;font-size:0.7rem;color:var(--mid);font-weight:normal;border:1px solid var(--dark3);padding:0.1rem 0.4rem;">⚙️ 정형 (${t.template_kind})</span>` : ''}
           </div>
           ${t.description ? `<div style="color:var(--mid);font-size:0.8rem;margin-bottom:0.4rem;">${t.description}</div>` : ''}
           <div style="font-size:0.85rem;line-height:1.5;"><strong style="color:var(--mid)">결재:</strong> ${names}</div>
@@ -3352,6 +3366,36 @@ function renderTemplates() {
         </div>
       </div>`;
   }).join('');
+  // 보관(archived)된 옛 템플릿 — 드롭다운엔 안 나옴. 여기서만 확인/삭제
+  const archived = templates.filter(t => t.archived);
+  if (archived.length) {
+    list.innerHTML += `<details style="margin-top:0.8rem;"><summary style="cursor:pointer;color:var(--mid);font-size:0.8rem;">🗄️ 보관된 템플릿 ${archived.length}개 (문서 종류 드롭다운에 표시되지 않음)</summary>` +
+      archived.map(t => `
+      <div style="border:1px dashed var(--dark3);padding:0.7rem 1rem;margin-top:0.5rem;display:flex;justify-content:space-between;align-items:center;gap:1rem;opacity:0.7;">
+        <div style="font-size:0.85rem;"><span style="color:var(--mid);">${t.name || '(이름 없음)'}</span> <span style="font-size:0.7rem;color:var(--mid);">— 정형 양식으로 대체되어 보관됨</span></div>
+        <button class="btn btn-outline" style="padding:0.3rem 0.7rem;font-size:0.74rem;color:var(--red);border-color:var(--red);" onclick="deleteTemplate('${t.id}')">Delete</button>
+      </div>`).join('') + `</details>`;
+  }
+}
+
+// 템플릿 순서 변경 (▲▼) — 보이는 순서대로 sort_order 0..n-1 재부여 후 일괄 저장 → 드롭다운/설정 즉시 반영
+function moveTemplate(id, dir) {
+  if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Manager')) { alert('관리자만 순서를 변경할 수 있습니다.'); return; }
+  const visible = templates.filter(t => !t.archived);
+  const i = visible.findIndex(t => t.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= visible.length) return;
+  [visible[i], visible[j]] = [visible[j], visible[i]];
+  const batch = db.batch();
+  visible.forEach((t, idx) => { t.sort_order = idx; batch.update(db.collection(TEMPLATES_COL).doc(t.id), { sort_order: idx }); });
+  // 로컬 즉시 반영 (스냅샷 도착 전에도 화면 순서 유지)
+  templates.sort((a, b) => {
+    const ao = (typeof a.sort_order === 'number') ? a.sort_order : 1e9;
+    const bo = (typeof b.sort_order === 'number') ? b.sort_order : 1e9;
+    return ao !== bo ? ao - bo : (a.name || '').localeCompare(b.name || '');
+  });
+  renderTemplates(); refreshTemplateDropdown();
+  batch.commit().catch(e => alert('순서 저장 오류: ' + e.message));
 }
 
 function getTemplateApproverOptions(selectedId) {
