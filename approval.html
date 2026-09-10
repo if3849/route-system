@@ -2270,9 +2270,10 @@ function renderCardSettlementForm(d) {
 // ── 구매 요청 (PO) — 벤더 선택형 ──
 function renderAmazonPurchaseForm(d) {
   const poDisplay = editingDocId ? (docs.find(x=>x.id===editingDocId)?.docNo || '제출 시 발급') : '(제출 시 발급)';
-  // 레거시 구매요청 문서(vendor 필드 없음)는 Amazon으로 간주. 신규 문서는 기본 Amazon 선택.
-  const dv = d.vendor || 'Amazon';
-  const isAmz = isAmazonVendor(dv);
+  // 레거시 구매요청 문서(편집 중인데 vendor 필드 없음)는 Amazon으로 간주.
+  // 신규 문서는 벤더 목록의 첫 항목이 기본 (KR처럼 Amazon이 목록에 없으면 'Amazon'이 "기타 매장"으로 새어 들어가는 문제 방지)
+  const dv = d.vendor || (editingDocId ? 'Amazon' : (vendorList[0] ? vendorList[0].name : ''));
+  const isAmz = dv ? isAmazonVendor(dv) : false;
   return `
     <div style="background:rgba(255,153,0,0.06);border:1px solid rgba(255,153,0,0.3);border-radius:10px;padding:14px;margin-bottom:1rem;">
       <div style="margin-bottom:0.8rem;">
@@ -2285,7 +2286,7 @@ function renderAmazonPurchaseForm(d) {
       <div style="font-size:0.72rem;color:var(--text-dim);background:rgba(255,153,0,0.08);border-left:3px solid #ff9900;padding:6px 10px;border-radius:4px;margin-bottom:0.7rem;">💡 위 <strong>TITLE</strong> 입력란이 품목명이 됩니다 (예: "Dell 27인치 모니터")</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div style="grid-column:1/3;"><label class="field-label">사용처 / Vendor *</label><select class="field-input" id="ap_vendor" onchange="onPurchaseVendorChange()">${vendorOptions(dv)}</select></div>
-        <div id="ap_vendor_other_wrap" style="grid-column:1/3;display:${findVendor(dv)?'none':''};"><label class="field-label">매장명 직접 입력 / Store name *</label><input class="field-input" type="text" id="ap_vendor_other" value="${findVendor(dv)?'':(dv||'').replace(/"/g,'&quot;')}" oninput="onPurchaseVendorChange()" placeholder="예: Harbor Freight, Costco, 동네 철물점"/></div>
+        <div id="ap_vendor_other_wrap" style="grid-column:1/3;display:${(dv && !findVendor(dv))?'':'none'};"><label class="field-label">매장명 직접 입력 / Store name *</label><input class="field-input" type="text" id="ap_vendor_other" value="${(dv && !findVendor(dv))?dv.replace(/"/g,'&quot;'):''}" oninput="onPurchaseVendorChange()" placeholder="예: Harbor Freight, Costco, 동네 철물점"/></div>
         <div id="ap_amazon_only" style="grid-column:1/3;display:${isAmz?'':'none'};">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
             <label class="field-label" style="margin-bottom:0;">Amazon 링크</label>
