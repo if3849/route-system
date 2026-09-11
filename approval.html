@@ -162,6 +162,12 @@
     .stat-card.green .stat-num { color:var(--green); }
     .stat-card.red .stat-num { color:var(--red); }
     .stat-card.orange .stat-num { color:#ff9900; }
+    .stat-card.clickable { cursor:pointer; transition:background 0.15s, transform 0.15s; }
+    .stat-card.clickable:hover { background:var(--dark2); transform:translateY(-2px); }
+    .stat-card.clickable::after { content:'→'; position:absolute; right:1rem; bottom:1rem; font-size:0.9rem; color:var(--mid); opacity:0; transition:opacity 0.15s; }
+    .stat-card.clickable:hover::after { opacity:1; }
+    .status-sel { background:var(--dark2); border:1px solid var(--gray); color:var(--white); padding:8px 10px; font-family:'Barlow',sans-serif; font-size:0.85rem; outline:none; margin-right:8px; }
+    .status-sel:focus { border-color:var(--accent); }
     .stat-label { font-family:'Barlow Condensed',sans-serif; font-size:0.75rem; letter-spacing:2px; text-transform:uppercase; color:var(--mid); }
 
     .table-wrap { background:var(--dark); border:1px solid var(--dark3); }
@@ -450,7 +456,7 @@
     <div class="sidebar-section">Documents</div>
     <div class="sidebar-item" onclick="showPage('mine')" id="nav-mine">📄 <span>My Documents</span><span class="badge" id="mineBadge" style="display:none;background:#ff9900">0</span></div>
     <div class="sidebar-item" onclick="showPage('pending')" id="nav-pending">⏳ <span>Pending Approval</span><span class="badge" id="pendingBadge" style="display:none">0</span></div>
-    <div class="sidebar-item" onclick="showPage('all')" id="nav-all">🗂️ <span>All Documents</span></div>
+    <div class="sidebar-item" onclick="goAllDocs('')" id="nav-all">🗂️ <span>All Documents</span></div>
     <div class="sidebar-section">System</div>
     <div class="sidebar-item" onclick="showPage('users')" id="nav-users">👥 <span>Users</span></div>
     <div class="sidebar-item" onclick="showPage('settings')" id="nav-settings">⚙️ <span>Settings</span></div>
@@ -464,11 +470,11 @@
         <button class="btn btn-gold" onclick="showPage('new')">+ New Document</button>
       </div>
       <div class="stats-grid">
-        <div class="stat-card gold"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Total</div></div>
-        <div class="stat-card gold"><div class="stat-num" id="stat-pending" style="color:var(--accent)">0</div><div class="stat-label">Pending</div></div>
-        <div class="stat-card orange"><div class="stat-num" id="stat-info">0</div><div class="stat-label">Info Req</div></div>
-        <div class="stat-card green"><div class="stat-num" id="stat-approved">0</div><div class="stat-label">Approved</div></div>
-        <div class="stat-card red"><div class="stat-num" id="stat-rejected">0</div><div class="stat-label">Rejected</div></div>
+        <div class="stat-card gold clickable" onclick="goAllDocs('')"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Total</div></div>
+        <div class="stat-card gold clickable" onclick="goAllDocs('pending')"><div class="stat-num" id="stat-pending" style="color:var(--accent)">0</div><div class="stat-label">Pending</div></div>
+        <div class="stat-card orange clickable" onclick="goAllDocs('info_requested')"><div class="stat-num" id="stat-info">0</div><div class="stat-label">Info Req</div></div>
+        <div class="stat-card green clickable" onclick="goAllDocs('approved')"><div class="stat-num" id="stat-approved">0</div><div class="stat-label">Approved</div></div>
+        <div class="stat-card red clickable" onclick="goAllDocs('rejected')"><div class="stat-num" id="stat-rejected">0</div><div class="stat-label">Rejected</div></div>
       </div>
       <div class="table-wrap">
         <div class="table-toolbar"><div class="table-title">Recent Documents</div></div>
@@ -589,7 +595,10 @@
       <div class="table-wrap">
         <div class="table-toolbar">
           <div class="table-title">Complete Document Log</div>
-          <input class="search-input" type="text" placeholder="Search..." oninput="filterTable('allTable',this.value)"/>
+          <div style="display:flex;align-items:center;">
+            <select class="status-sel" id="allStatusSel" onchange="allStatusFilter=this.value; refreshPage('all')"></select>
+            <input class="search-input" type="text" placeholder="Search..." oninput="filterTable('allTable',this.value)"/>
+          </div>
         </div>
         <table><thead><tr><th>Doc No.</th><th>Title</th><th>Type</th><th>Requester</th><th>Progress</th><th>Date</th><th>Status</th><th>Action</th></tr></thead>
         <tbody id="allTable"></tbody></table>
@@ -2747,12 +2756,34 @@ function canViewDoc(doc) {
 }
 function getVisibleDocs() { return docs.filter(d => canViewDoc(d)); }
 
+// ── 대시보드 통계 카드 클릭 → 전체 문서에서 해당 상태만 보기 ──
+var allStatusFilter = '';
+function matchStatusFilter(d) {
+  if (!allStatusFilter) return true;
+  if (allStatusFilter === 'rejected') return d.status === 'rejected' || hasBeenRejected(d); // 대시보드 Rejected 집계와 동일 기준
+  return d.status === allStatusFilter;
+}
+function goAllDocs(st) {
+  allStatusFilter = st || '';
+  const sel = document.getElementById('allStatusSel'); if (sel) sel.value = allStatusFilter;
+  showPage('all');
+}
+function initStatusSel() {
+  const sel = document.getElementById('allStatusSel'); if (!sel) return;
+  const L = IS_KR
+    ? {'':'전체 상태', pending:'대기', info_requested:'질의중', approved:'승인', rejected:'반려'}
+    : {'':'All Status', pending:'Pending', info_requested:'Info Req', approved:'Approved', rejected:'Rejected'};
+  sel.innerHTML = Object.keys(L).map(k => `<option value="${k}">${L[k]}</option>`).join('');
+  sel.value = allStatusFilter;
+}
+document.addEventListener('DOMContentLoaded', initStatusSel);
+
 function refreshPage(name) {
   const visible = getVisibleDocs();
   if (name === 'dashboard') renderDashboard();
   if (name === 'mine') renderTable('mineTable', visible.filter(d => sameId(d.requesterId, currentUser.id)), 'mine');
   if (name === 'pending') renderTable('pendingTable', visible.filter(d => isMyTurn(d)), 'pending');
-  if (name === 'all') renderTable('allTable', visible, 'all');
+  if (name === 'all') renderTable('allTable', visible.filter(matchStatusFilter), 'all');
   if (name === 'users') renderUsers();
   if (name === 'new') initNewPage();
 }
