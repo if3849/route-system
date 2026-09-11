@@ -1876,7 +1876,7 @@ function updateRefundInfo() {
   const amt = parseFormattedNumber(v('rf_amount'));
   const over = amt > rem + 0.004;
   box.innerHTML = `<div style="color:#10b981;background:rgba(16,185,129,0.08);border-left:3px solid #10b981;padding:6px 10px;border-radius:4px;">✓ 원 결재 <strong>${orig.docNo}</strong> · 원금액 ${fmtCUR(total)}` +
-    (done > 0 ? ` · 기환불 ${fmtCUR(done)}` : '') + ` · <strong>환불 가능 ${fmtCUR(rem)}</strong>` +
+    (done > 0 ? ` · 기환불 ${fmtCUR(done)}` : '') + ` · <strong>환불 가능 ${fmtCUR(rem)}</strong>` + (editingDocId ? '' : ` · 문서번호는 <strong>${orig.docNo.replace(/-[ER]d*$/,'')}-R</strong>로 발급됩니다`) +
     (over ? `<div style="color:var(--red);margin-top:4px;">⚠️ 환불금액이 환불 가능 잔액을 초과합니다.</div>` : '') + `</div>`;
   return { orig, total, done, rem, over };
 }
@@ -2519,7 +2519,7 @@ function updateExpensePoStatus() {
   const ev = evalPreApproval(sd);
   if (!box) return ev;
   if (ev.mode === 'po') {
-    box.innerHTML = `<div style="color:#10b981;background:rgba(16,185,129,0.08);border-left:3px solid #10b981;padding:6px 10px;border-radius:4px;">✓ 사전승인 <strong>${sd.poDocNo}</strong> 연결됨 · 예상액 ${fmtCUR(sd.poAmount)}` +
+    box.innerHTML = `<div style="color:#10b981;background:rgba(16,185,129,0.08);border-left:3px solid #10b981;padding:6px 10px;border-radius:4px;">✓ 사전승인 <strong>${sd.poDocNo}</strong> 연결됨 · 예상액 ${fmtCUR(sd.poAmount)}` + (editingDocId ? '' : ` · 문서번호는 <strong>${sd.poDocNo.replace(/-[ER]d*$/,'')}-E</strong>로 발급됩니다`) +
       (ev.isOver ? `<div style="color:#fbbf24;margin-top:4px;">📈 예상액 대비 <strong>+${ev.overagePct}%</strong> 초과 — 결재자에게 경고가 표시됩니다 (기준 +${poPolicy.overagePct}%)</div>` : '') + `</div>`;
     if (wrap) wrap.style.display = 'none';
   } else if (ev.mode === 'exempt') {
@@ -3528,6 +3528,24 @@ function deleteTemplate(id) {
 
 // ── ★ SUBMIT — 신규 + 재제출 통합 처리 ──
 // ── 원자적 문서 번호 발급 (Firestore 트랜잭션) — 동시 제출 race condition 방지 ──
+// 연결 문서 번호 파생: card_expense(PO 연결) → <PO번호>-E, refund → <원번호 본체>-R. 이미 있으면 -E2, -E3…
+// 원번호 본체 = 꼬리표 제거 (RSI-0452-E 의 환불도 RSI-0452-R). 해당 없으면 null → 일반 채번
+async function deriveLinkedDocNo(sd) {
+  if (!sd) return null;
+  let baseNo = '', tag = '';
+  if (sd.kind === 'card_expense' && sd.poDocNo) { baseNo = sd.poDocNo; tag = 'E'; }
+  else if (sd.kind === 'refund' && sd.origDocNo) { baseNo = sd.origDocNo; tag = 'R'; }
+  if (!baseNo) return null;
+  baseNo = baseNo.replace(/-[ER]\d*$/, '');
+  for (let n = 1; n <= 20; n++) {
+    const cand = `${baseNo}-${tag}${n === 1 ? '' : n}`;
+    if (docs.some(d => d.docNo === cand)) continue;
+    const dup = await db.collection(DOCS_COL).where('docNo', '==', cand).limit(1).get();
+    if (dup.empty) return cand;
+  }
+  throw new Error('연결 문서 번호 발급 실패 (' + baseNo + '-' + tag + ' 20회 충돌)');
+}
+
 async function reserveNextDocNo() {
   const ref = db.collection('meta').doc(COUNTER_ID);
   // 채번 후 동일 docNo가 documents에 이미 있으면 counter를 bump하고 재시도 (방어)
@@ -3636,16 +3654,21 @@ async function submitDoc(status) {
     return;
   }
 
-  // ── 신규 문서 생성 (원자적 채번) ──
-  let nextNum;
+  // ── 신규 문서 생성 (채번) ──
+  // ★ PO에 연결된 비용청구(정산)·환불은 새 번호 대신 원 번호에 꼬리표: RSI-0452 → RSI-0452-E(정산) / RSI-0452-R(환불)
+  //    직원이 "매장 구매 = 번호 하나"로 기억하게 하려는 것 (Amazon처럼). 카운터는 소모하지 않음.
+  let docNo;
   try {
-    nextNum = await reserveNextDocNo();
+    docNo = await deriveLinkedDocNo(structuredData);
+    if (!docNo) {
+      const nextNum = await reserveNextDocNo();
+      docCounter = nextNum;
+      docNo = DOCNO_PREFIX + String(nextNum).padStart(4, '0');
+    }
   } catch(e) {
     alert('문서 번호 발급 실패: ' + (e.message || e));
     return;
   }
-  docCounter = nextNum;
-  const docNo = DOCNO_PREFIX + String(nextNum).padStart(4, '0');
   const approversData = selApprovers.map(id => ({ id, status:'pending', comment:'', at:null }));
   const docData = {
     id: 'doc_' + Date.now(), docNo, type, title,
