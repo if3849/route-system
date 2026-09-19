@@ -424,7 +424,7 @@
         <div class="hub-card-desc" data-ko="견적 작성 · 변환 · 보관">Create, Convert &amp; Archive</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
-      <div class="hub-card" id="hubCardHR" style="display:none" onclick="window.open('hr-kr.html','_blank')">
+      <div class="hub-card" id="hubCardHR" style="display:none" onclick="enterHR()">
         <span class="hub-card-icon">&#128101;</span>
         <div class="hub-card-title" data-ko="직원관리대장">HR Ledger</div>
         <div class="hub-card-desc" data-ko="인사 · 연차 · 급여 · 증명서">Employee Management</div>
@@ -1521,6 +1521,15 @@ async function enterQuotation() {
     const token = await u.getIdToken(true);
     window.open('http://routesystem.synology.me:' + (IS_KR?'8092':'8082') + '/sso?token='+encodeURIComponent(token), '_blank');
   } catch(e) { alert('Quotation 접속 실패: '+e.message); }
+}
+// 직원관리대장(HR) — 중앙저장 버전. Firebase 토큰으로 SSO(minki.kim·tim.park만 허용). KR 전용.
+async function enterHR() {
+  try {
+    const u = firebase.auth().currentUser;
+    if (!u) { alert('세션이 만료되었습니다. 다시 로그인해 주세요.'); return; }
+    const token = await u.getIdToken(true);
+    window.open('https://rsk-fieldreport.tail66c283.ts.net:8443/sso?token='+encodeURIComponent(token), '_blank');
+  } catch(e) { alert('직원관리대장 접속 실패: '+e.message); }
 }
 function enterApproval() {
   try{ sessionStorage.setItem('rs_screen','approval'); }catch(e){}
