@@ -424,6 +424,12 @@
         <div class="hub-card-desc" data-ko="견적 작성 · 변환 · 보관">Create, Convert &amp; Archive</div>
         <span class="hub-card-arrow">&#8594;</span>
       </div>
+      <div class="hub-card" id="hubCardHR" style="display:none" onclick="window.open('hr-kr.html','_blank')">
+        <span class="hub-card-icon">&#128101;</span>
+        <div class="hub-card-title" data-ko="직원관리대장">HR Ledger</div>
+        <div class="hub-card-desc" data-ko="인사 · 연차 · 급여 · 증명서">Employee Management</div>
+        <span class="hub-card-arrow">&#8594;</span>
+      </div>
       <div class="hub-card" onclick="window.open('https://routesystemus.direct.quickconnect.to:5001/','_blank')">
         <span class="hub-card-icon">&#128190;</span>
         <div class="hub-card-title" data-ko="NAS 파일서버">NAS(파일서버)</div>
@@ -994,6 +1000,7 @@ document.addEventListener('DOMContentLoaded', function(){
     var hs = document.querySelector('#hubScreen .hub-subtitle'); if (hs) hs.textContent = '🇰🇷 (주)라우트시스템 · 한국지사 포털';
     var ls = document.querySelector('#loginScreen .login-sub'); if (ls) ls.textContent = '🇰🇷 (주)라우트시스템 · 한국지사';
     // 한국 공사일보(현장앱) KR 인스턴스 추가됨(2026-09) → 카드 노출 (이전엔 숨김)
+    var hrCard = document.getElementById('hubCardHR'); if (hrCard) hrCard.style.display = '';  // 직원관리대장 = 한국지사 전용
     // 허브 앱 카드/문구 한글화
     document.querySelectorAll('#hubScreen [data-ko]').forEach(function (el) {
       var k = el.getAttribute('data-ko'); if (k) el.textContent = k;
