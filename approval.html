@@ -1114,7 +1114,7 @@ window.addEventListener('load', function() {
       const _RA_TARGETS = {
         asset:       'http://routesystem.synology.me:' + (IS_KR?'8090':'8080') + '/sso',
         quotation:   'http://routesystem.synology.me:' + (IS_KR?'8092':'8082') + '/sso',
-        fieldreport: 'http://98.167.239.190:' + (IS_KR?'3010':'3000') + '/sso'
+        fieldreport: (IS_KR ? 'https://rsk-fieldreport.tail66c283.ts.net' : 'http://98.167.239.190:3000') + '/sso'
       };
       if (_ra && _RA_TARGETS[_ra]) {
         firebase.auth().onAuthStateChanged(async function(_u){
@@ -1504,7 +1504,7 @@ async function enterFieldReport() {
     const u = firebase.auth().currentUser;
     if (!u) { alert('세션이 만료되었습니다. 다시 로그인해 주세요.'); return; }
     const token = await u.getIdToken(true);
-    window.open('http://98.167.239.190:' + (IS_KR?'3010':'3000') + '/sso?token='+encodeURIComponent(token), '_blank');
+    window.open((IS_KR ? 'https://rsk-fieldreport.tail66c283.ts.net' : 'http://98.167.239.190:3000') + '/sso?token='+encodeURIComponent(token), '_blank');
   } catch(e) { alert('Field Report 접속 실패: '+e.message); }
 }
 async function enterQuotation() {
