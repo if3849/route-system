@@ -3086,7 +3086,80 @@ function buildActions(doc, mode) {
   if (mode === 'mine' && (doc.status === 'draft' || doc.status === 'pending' || doc.status === 'rejected' || doc.status === 'info_requested')) {
     b += ` <button class="btn-sm btn-sm-outline" onclick="deleteDoc('${doc.id}')">Delete</button>`;
   }
+  // ★ 강제 삭제(대표 전용): 승인된 문서도 자산관리 연동 거래와 함께 삭제
+  if (canForceDelete() && doc.status === 'approved') {
+    b += ` <button class="btn-sm" style="background:transparent;color:var(--red);border:1px solid var(--red);" title="${IS_KR?'승인 문서 강제 삭제 (자산관리 거래 포함)':'Force delete approved doc (incl. asset transaction)'}" onclick="forceDeleteDoc('${doc.id}')">🗑 ${IS_KR?'강제삭제':'Force Del'}</button>`;
+  }
   return b;
+}
+
+// ── ★ 강제 삭제 (대표 전용) — 승인 문서 + 자산관리 연동 거래 + PO정산/환불 표시 되돌리기 ──
+const FORCE_DELETERS = ['tim.park@routesystemus.com'];
+function canForceDelete() {
+  if (!currentUser || currentUser.role !== 'Admin') return false;
+  const keys = [currentUser.id, currentUser.email].filter(Boolean).map(x => String(x).toLowerCase());
+  return FORCE_DELETERS.some(e => keys.includes(e.toLowerCase()));
+}
+async function forceDeleteDoc(docId) {
+  if (!canForceDelete()) return;
+  const doc = docs.find(d => d.id === docId); if (!doc) return;
+  const sd = doc.structuredData || {};
+  const lines = [
+    IS_KR ? '⚠️ 승인된 문서를 강제 삭제합니다. 되돌릴 수 없습니다.' : '⚠️ Force-deleting an APPROVED document. This cannot be undone.',
+    '',
+    doc.docNo + ' — ' + doc.title,
+    (IS_KR ? '종류: ' : 'Type: ') + doc.type,
+    doc.assetTxId ? (IS_KR ? '자산관리 거래도 함께 삭제됩니다 (TX ' + doc.assetTxId.slice(0,8) + ', ' + fmtCUR(sd.amount||0) + ')' : 'Linked asset transaction will also be deleted (TX ' + doc.assetTxId.slice(0,8) + ', ' + fmtCUR(sd.amount||0) + ')')
+                  : (IS_KR ? '자산관리 연동 거래 없음' : 'No linked asset transaction'),
+  ];
+  const settledPo = docs.find(d => d.settledBy && d.settledBy.docId === doc.id);
+  if (settledPo) lines.push(IS_KR ? ('구매요청 ' + settledPo.docNo + '의 정산완료 표시가 해제됩니다 (다시 구매대기)') : ('PO ' + settledPo.docNo + ' will be reverted to unsettled'));
+  const refundOrig = sd.kind === 'refund' && sd.origDocId ? docs.find(d => d.id === sd.origDocId) : null;
+  if (refundOrig) lines.push(IS_KR ? ('원 결재 ' + refundOrig.docNo + '의 환불 기록이 제거됩니다') : ('Refund record on ' + refundOrig.docNo + ' will be removed'));
+  if (doc.settledBy) lines.push(IS_KR ? ('※ 이 구매요청은 ' + doc.settledBy.docNo + '로 정산된 상태입니다. 정산 문서는 남습니다.') : ('※ This PO was settled by ' + doc.settledBy.docNo + '; that document will remain.'));
+  lines.push('', IS_KR ? '계속하려면 문서번호를 입력하세요:' : 'Type the document number to confirm:');
+  const typed = prompt(lines.join('\n'), '');
+  if (typed === null) return;
+  if (typed.trim() !== doc.docNo) { alert(IS_KR ? '문서번호가 일치하지 않아 취소했습니다.' : 'Document number did not match. Cancelled.'); return; }
+
+  const log = [];
+  // 1) 자산관리 거래 삭제 (없으면 404 → 통과)
+  if (doc.assetTxId) {
+    try {
+      const r = await fetch(ASSET_API_BASE + '/delete-asset-tx', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch: BRANCH, tx_id: doc.assetTxId, source_doc_no: doc.docNo })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const msg = (body.asset_response && (body.asset_response.error || JSON.stringify(body.asset_response))) || body.error || ('HTTP ' + r.status);
+        alert((IS_KR ? '자산관리 거래 삭제 실패 — 문서는 삭제하지 않았습니다.\n' : 'Asset transaction delete failed — document NOT deleted.\n') + msg);
+        return;
+      }
+      log.push(body.status === 404 ? (IS_KR ? '자산관리 거래: 이미 없음' : 'Asset TX: already gone') : (IS_KR ? '자산관리 거래 삭제됨' : 'Asset TX deleted'));
+    } catch (e) {
+      alert((IS_KR ? '자산관리 서버에 연결할 수 없어 취소했습니다.\n' : 'Could not reach asset server. Cancelled.\n') + e.message);
+      return;
+    }
+  }
+  // 2) 연동 표시 되돌리기
+  try {
+    if (settledPo) {
+      const { settledBy, ...rest } = settledPo;
+      await saveDoc({ ...rest, history: [ ...(settledPo.history || []), { action: 'unsettled', by: currentUser.id, at: Date.now(), comment: (IS_KR ? '정산 문서 삭제로 정산 취소: ' : 'Settlement reverted (doc deleted): ') + doc.docNo } ] });
+      log.push((IS_KR ? '구매요청 정산 해제: ' : 'PO unsettled: ') + settledPo.docNo);
+    }
+    if (refundOrig) {
+      await saveDoc({ ...refundOrig, refunds: (refundOrig.refunds || []).filter(r => r.docId !== doc.id),
+        history: [ ...(refundOrig.history || []), { action: 'refund_removed', by: currentUser.id, at: Date.now(), comment: (IS_KR ? '환불 문서 삭제: ' : 'Refund doc deleted: ') + doc.docNo } ] });
+      log.push((IS_KR ? '환불 기록 제거: ' : 'Refund record removed: ') + refundOrig.docNo);
+    }
+  } catch (e) { console.warn('revert links failed', e); log.push('⚠️ ' + (IS_KR ? '연동 표시 되돌리기 실패 (수동 확인)' : 'link revert failed (check manually)')); }
+  // 3) 감사 기록(삭제본 보관, 실패해도 진행) → 4) 문서 삭제
+  try { await db.collection(DOCS_COL + '_deleted').doc(doc.id).set({ ...doc, deletedBy: currentUser.id, deletedAt: Date.now() }); log.push(IS_KR ? '삭제본 보관됨' : 'Copy archived'); } catch (e) { console.warn('archive failed', e); }
+  await removeDoc(doc.id);
+  alert((IS_KR ? '✓ 강제 삭제 완료: ' : '✓ Force-deleted: ') + doc.docNo + '\n' + log.join('\n'));
+  showPage('mine');
 }
 
 // ── 승인된 매장 구매요청(PO) → 비용청구 새 문서 열기 (PO 자동 선택 + 벤더/카테고리/프로젝트 채움) ──
