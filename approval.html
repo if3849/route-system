@@ -3214,9 +3214,16 @@ function buildApproverLine() {
   document.getElementById('approverLine').innerHTML = '';
   addApproverRow();
 }
+// ★ 전결(자체 결재): 아래 명단(대표)만 본인을 결재자로 지정 가능 (제출 즉시 그 단계가 자동 승인됨). Admin이라도 명단 밖이면 불가.
+const SELF_APPROVERS = ['tim.park@routesystemus.com'];
+function canSelfApprove() {
+  if (!currentUser || currentUser.role !== 'Admin') return false;
+  const keys = [currentUser.id, currentUser.email].filter(Boolean).map(x => String(x).toLowerCase());
+  return SELF_APPROVERS.some(e => keys.includes(e.toLowerCase()));
+}
 function getApproverOptions(selectedId) {
-  return users.filter(u => u.id !== currentUser.id).map(u =>
-    `<option value="${u.id}" ${u.id===selectedId?'selected':''}>${u.name} (${u.role})</option>`
+  return users.filter(u => u.id !== currentUser.id || canSelfApprove()).map(u =>
+    `<option value="${u.id}" ${u.id===selectedId?'selected':''}>${u.name} (${u.role})${u.id===currentUser.id ? (IS_KR ? ' — 본인 전결' : ' — Self-approve') : ''}</option>`
   ).join('');
 }
 function addApproverRow() {
@@ -3328,7 +3335,7 @@ function applyApprovalTemplate(t) {
   // 본인은 자기 결재자가 될 수 없으므로 제외
   const skippedNames = [];
   const filteredApprovers = (t.approvers || []).filter(id => {
-    if (id === currentUser.id) {
+    if (id === currentUser.id && !canSelfApprove()) {
       const u = users.find(x => x.id === id);
       skippedNames.push(u ? u.name : id);
       return false;
@@ -3651,6 +3658,7 @@ async function submitDoc(status) {
     if (!title)        { alert('제목(Title)을 입력해 주세요.\nPlease enter a title.'); return; }
     if (!contentFinal) { alert('본문(Content)을 입력해 주세요.\nPlease enter content.'); return; }
     if (!selApprovers.length) { alert('결재자를 1명 이상 선택해 주세요.\nPlease add at least one approver.'); return; }
+    if (selApprovers.includes(currentUser.id) && !canSelfApprove()) { alert('본인은 자신의 결재자가 될 수 없습니다.\nYou cannot approve your own document.'); return; }
     if (new Set(selApprovers).size !== selApprovers.length) { alert('동일한 결재자가 중복 선택되었습니다.\nDuplicate approvers found.'); return; }
     const overlap = selCc.filter(c => selApprovers.includes(c));
     if (overlap.length) { alert('결재자와 참조자에 동일인이 있습니다.\nSame person in both approvers and CC.'); return; }
@@ -3688,9 +3696,10 @@ async function submitDoc(status) {
       ]
     };
 
-    saveDoc(updatedDoc).then(() => {
+    saveDoc(updatedDoc).then(async () => {
       editingDocId = null;
       uploadedFiles = [];
+      if (!isDraftSave && await selfApproveIfOwnTurn(updatedDoc)) { showPage('mine'); return; }
       if (isDraftSave) {
         alert('✓ 임시저장 업데이트 완료.');
       } else if (wasDraft) {
@@ -3758,8 +3767,10 @@ async function submitDoc(status) {
     hideStructuredPanel();
     uploadedFiles = []; renderFileList();
     buildApproverLine(); buildCcLine();
-    if (status === 'pending' && approversData.length > 0) sendEmail(approversData[0].id, docData, 'submitted', '');
+    if (status === 'pending' && approversData.length > 0 && !sameId(approversData[0].id, currentUser.id)) sendEmail(approversData[0].id, docData, 'submitted', '');
     if (status === 'pending') sendCcEmails(docData, 'cc_submitted', '');
+    // ★ 전결: 첫 결재자가 본인(Admin)이면 제출과 동시에 그 단계 승인 처리
+    if (status === 'pending' && await selfApproveIfOwnTurn(docData)) { showPage('mine'); return; }
     alert(status==='draft' ? '✓ Saved as draft.' : '✓ Submitted!');
     showPage('mine');
   }).catch(e => alert('저장 오류: ' + e.message));
@@ -3891,6 +3902,32 @@ function openApprove(docId, action) {
 async function doApprove(action) {
   const doc = docs.find(d => d.id === currentDocId); if (!doc) return;
   const comment = document.getElementById('approveComment').value.trim();
+  const { syncMsg, stepNum } = await processApproval(doc, action, comment);
+  closeModal('approveModal');
+  if (action === 'approve' && doc.status === 'approved') alert((IS_KR?'✓ 최종 결재 완료!':'✓ All steps approved!') + syncMsg);
+  else if (action === 'approve') alert(IS_KR
+    ? ('✓ ' + (stepNum+1) + '단계 승인 완료. ' + (stepNum+2) + '단계로 전달했습니다.')
+    : ('✓ Step ' + (stepNum+1) + ' approved. Forwarded to Step ' + (stepNum+2) + '.'));
+  else alert(IS_KR ? '✕ 문서를 반려했습니다.' : '✕ Document rejected.');
+}
+
+// ★ 전결(자체 결재): 제출 직후 현재 단계 결재자가 본인(Admin)이면 그 단계를 자동 승인.
+//    다음 결재자가 있으면 그 사람에게 넘어가고, 본인이 마지막이면 최종 승인 + 자산관리 sync까지 동일하게 수행.
+async function selfApproveIfOwnTurn(doc) {
+  if (!canSelfApprove() || doc.status !== 'pending') return false;
+  const step = doc.currentStep || 0;
+  const cur = (doc.approvers || [])[step];
+  if (!cur || !sameId(cur.id, currentUser.id) || cur.status !== 'pending') return false;
+  const { syncMsg, stepNum } = await processApproval(doc, 'approve', IS_KR ? '전결 (본인 승인)' : 'Self-approved');
+  if (doc.status === 'approved') alert((IS_KR ? '✓ 제출 + 전결 완료 (최종 승인)' : '✓ Submitted & self-approved (final)') + syncMsg);
+  else alert(IS_KR
+    ? ('✓ 제출 + ' + (stepNum+1) + '단계 전결 완료. ' + (stepNum+2) + '단계 결재자에게 전달했습니다.')
+    : ('✓ Submitted & step ' + (stepNum+1) + ' self-approved. Forwarded to step ' + (stepNum+2) + '.'));
+  return true;
+}
+
+// 승인/반려 처리 본체 (모달 doApprove와 전결 selfApproveIfOwnTurn이 공유)
+async function processApproval(doc, action, comment) {
   const step = doc.currentStep || 0;
   doc.approvers[step].status = action === 'approve' ? 'approved' : 'rejected';
   doc.approvers[step].comment = comment;
@@ -3914,7 +3951,6 @@ async function doApprove(action) {
     }
   }
   await saveDoc(doc); saveData();
-  closeModal('approveModal');
   const stepNum = step;
 
   // ★ 최종 승인 & 정형 데이터 있음 → 자산관리 자동 sync
@@ -3954,12 +3990,7 @@ async function doApprove(action) {
     // 환불 결재면 원 결재 문서에 환불 이력 기록
     syncMsg += await recordRefundOnOriginal(doc);
   }
-
-  if (action === 'approve' && doc.status === 'approved') alert((IS_KR?'✓ 최종 결재 완료!':'✓ All steps approved!') + syncMsg);
-  else if (action === 'approve') alert(IS_KR
-    ? ('✓ ' + (stepNum+1) + '단계 승인 완료. ' + (stepNum+2) + '단계로 전달했습니다.')
-    : ('✓ Step ' + (stepNum+1) + ' approved. Forwarded to Step ' + (stepNum+2) + '.'));
-  else alert(IS_KR ? '✕ 문서를 반려했습니다.' : '✕ Document rejected.');
+  return { syncMsg, stepNum };
 }
 
 // ── 질의 / 답변 / 의견 ──
