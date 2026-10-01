@@ -3976,11 +3976,17 @@ function openApprove(docId, action) {
     </button>`;
   document.getElementById('approveModal').classList.add('open');
 }
+let _approveBusy = false;  // 승인 버튼 연타 방지 (2026-10-01, RSI-0561 이중 승인 → 자산 거래 중복 생성 사고)
 async function doApprove(action) {
+  if (_approveBusy) return;
   const doc = docs.find(d => d.id === currentDocId); if (!doc) return;
   const comment = document.getElementById('approveComment').value.trim();
-  const { syncMsg, stepNum } = await processApproval(doc, action, comment);
+  _approveBusy = true;
+  let res;
+  try { res = await processApproval(doc, action, comment); } finally { _approveBusy = false; }
   closeModal('approveModal');
+  if (res.skipped) { alert(IS_KR ? '이미 처리된 문서입니다.' : 'This document has already been processed.'); return; }
+  const { syncMsg, stepNum } = res;
   if (action === 'approve' && doc.status === 'approved') alert((IS_KR?'✓ 최종 결재 완료!':'✓ All steps approved!') + syncMsg);
   else if (action === 'approve') alert(IS_KR
     ? ('✓ ' + (stepNum+1) + '단계 승인 완료. ' + (stepNum+2) + '단계로 전달했습니다.')
@@ -4006,6 +4012,8 @@ async function selfApproveIfOwnTurn(doc) {
 // 승인/반려 처리 본체 (모달 doApprove와 전결 selfApproveIfOwnTurn이 공유)
 async function processApproval(doc, action, comment) {
   const step = doc.currentStep || 0;
+  // 이미 처리된 단계면 무시 (이중 승인 → 이중 sync 방지)
+  if (doc.status !== 'pending' || !doc.approvers[step] || doc.approvers[step].status !== 'pending') return { syncMsg: '', stepNum: step, skipped: true };
   doc.approvers[step].status = action === 'approve' ? 'approved' : 'rejected';
   doc.approvers[step].comment = comment;
   doc.approvers[step].at = Date.now();
