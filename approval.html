@@ -472,6 +472,7 @@
     <div class="sidebar-section">System</div>
     <div class="sidebar-item" onclick="showPage('users')" id="nav-users">👥 <span>Users</span></div>
     <div class="sidebar-item" onclick="showPage('settings')" id="nav-settings">⚙️ <span>Settings</span></div>
+    <div class="sidebar-item" onclick="openTrash()" id="nav-trash" style="display:none">🗑 <span>Trash</span></div>
   </div>
 
   <div class="main">
@@ -1544,6 +1545,7 @@ function enterApproval() {
   document.getElementById('app').style.display = 'block';
   document.getElementById('topbarUser').textContent = currentUser.name + ' (' + currentUser.role + ')';
   document.getElementById('nav-settings').style.display = (currentUser.role === 'Admin' || currentUser.role === 'Manager') ? 'flex' : 'none';
+  { const nt = document.getElementById('nav-trash'); if (nt) nt.style.display = currentUser.role === 'Admin' ? 'flex' : 'none'; }
   document.getElementById('exportExcelBtn').style.display = currentUser.role === 'Admin' ? 'inline-flex' : 'none';
   history.pushState({screen:'approval'}, '', '');
   refreshAll(); showPage('dashboard');
@@ -3125,6 +3127,7 @@ async function forceDeleteDoc(docId) {
   const typed = prompt(lines.join('\n'), '');
   if (typed === null) return;
   if (typed.trim() !== doc.docNo) { alert(IS_KR ? '문서번호가 일치하지 않아 취소했습니다.' : 'Document number did not match. Cancelled.'); return; }
+  if (!(await requireDeletePw())) return;   // ★ 삭제 인터록 (2026-10-01)
 
   const log = [];
   // 1) 자산관리 거래 삭제 (없으면 404 → 통과)
@@ -4307,9 +4310,91 @@ async function syncDocToAssetManager(doc) {
 
 async function deleteDoc(docId) {
   const doc = docs.find(d => d.id === docId); if (!doc) return;
-  if (!confirm('이 문서를 삭제하시겠습니까?')) return;
+  if (!confirm(IS_KR ? '이 문서를 삭제하시겠습니까?' : 'Delete this document?')) return;
+  // ★ 삭제 인터록 (2026-10-01): 상신된 문서(대기·반려·질의)는 회사 공통 삭제 비밀번호 필요. 임시저장은 제외
+  if (doc.status !== 'draft' && !(await requireDeletePw())) return;
+  await archiveDeleted(doc);
   await removeDoc(docId);
-  alert('✓ 문서가 삭제됐습니다.');
+  alert(IS_KR ? '✓ 문서가 삭제됐습니다. (휴지통에 보관)' : '✓ Document deleted (kept in Trash).');
+}
+
+// ── 삭제 인터록 공통: 비밀번호 창 + 결재서버(/verify-delete-pw → 자산관리) 확인 + 휴지통 ──
+function askDeletePw(msg) {
+  return new Promise(res => {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    ov.innerHTML = '<div style="background:#141414;color:#eee;border:1px solid #333;border-top:3px solid var(--accent,#c8a96e);padding:22px;width:340px;max-width:92vw;">'
+      + '<div style="font-weight:700;font-size:15px;margin-bottom:6px;">🔒 ' + (IS_KR ? '삭제 비밀번호' : 'Delete password') + '</div>'
+      + '<div style="font-size:12px;color:#aaa;margin-bottom:12px;line-height:1.5;">' + (msg || (IS_KR ? '상신된 문서 삭제에는 삭제 비밀번호가 필요합니다. 지운 문서는 휴지통에 보관되어 복원할 수 있습니다.' : 'A delete password is required. Deleted documents are kept in Trash and can be restored.')) + '</div>'
+      + '<input type="password" autocomplete="off" style="width:100%;box-sizing:border-box;padding:9px 10px;background:#0a0a0a;color:#eee;border:1px solid #444;">'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button data-x="0" class="btn-sm btn-sm-outline">' + (IS_KR ? '취소' : 'Cancel') + '</button><button data-x="1" class="btn-sm" style="background:var(--red,#c0392b);color:#fff;border:0;">' + (IS_KR ? '삭제' : 'Delete') + '</button></div></div>';
+    document.body.appendChild(ov);
+    const inp = ov.querySelector('input'); inp.focus();
+    const done = v => { ov.remove(); res(v); };
+    ov.querySelector('[data-x="0"]').onclick = () => done(null);
+    ov.querySelector('[data-x="1"]').onclick = () => done(inp.value || null);
+    inp.onkeydown = e => { if (e.key === 'Enter') done(inp.value || null); if (e.key === 'Escape') done(null); };
+  });
+}
+async function requireDeletePw() {
+  let msg = null;
+  for (let i = 0; i < 3; i++) {
+    const pw = await askDeletePw(msg); if (!pw) return false;
+    let j = null;
+    try {
+      const r = await fetch(ASSET_API_BASE + '/verify-delete-pw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw, branch: BRANCH }) });
+      j = await r.json();
+    } catch (e) { alert(IS_KR ? '삭제 비밀번호를 확인할 수 없습니다 (서버 연결 실패). 잠시 후 다시 시도하세요.' : 'Could not verify the delete password (server unreachable).'); return false; }
+    if (j && j.ok) return true;
+    if (j && j.code === 'delete_pw_unset') { alert(IS_KR ? '삭제 비밀번호가 아직 설정되지 않아 삭제할 수 없습니다. 자산관리 › 설정에서 먼저 지정하세요.' : 'No delete password is set yet. Set it in Asset Manager › Settings first.'); return false; }
+    if (j && j.code && j.code !== 'delete_pw_required') { alert(j.error || 'error'); return false; }
+    msg = IS_KR ? '❌ 비밀번호가 틀렸습니다. 다시 입력하세요.' : '❌ Wrong password. Try again.';
+  }
+  return false;
+}
+async function archiveDeleted(doc) {
+  try { await db.collection(DOCS_COL + '_deleted').doc(doc.id).set({ ...doc, deletedBy: currentUser.id, deletedAt: Date.now() }); }
+  catch (e) { console.warn('archive failed', e); }
+}
+// 휴지통 (Admin): 지운 문서 목록 · 복원
+async function openTrash() {
+  if (!currentUser || currentUser.role !== 'Admin') return;
+  let ov = document.getElementById('trashOverlay');
+  if (!ov) {
+    ov = document.createElement('div'); ov.id = 'trashOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    ov.innerHTML = '<div style="background:#141414;color:#eee;border:1px solid #333;width:900px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #333;"><b>🗑 ' + (IS_KR ? '휴지통 — 지운 결재 문서' : 'Trash — deleted documents') + '</b><button class="btn-sm btn-sm-outline" id="trashClose">' + (IS_KR ? '닫기' : 'Close') + '</button></div>'
+      + '<div id="trashBody" style="overflow:auto;padding:8px 18px 16px;font-size:13px;"></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { if (e.target === ov || e.target.id === 'trashClose') ov.style.display = 'none'; });
+    ov.querySelector('#trashBody').addEventListener('click', async e => {
+      const b = e.target.closest('[data-restore]'); if (!b) return;
+      if (!confirm(IS_KR ? '이 문서를 복원할까요?' : 'Restore this document?')) return;
+      const id = b.dataset.restore;
+      const snap = await db.collection(DOCS_COL + '_deleted').doc(id).get(); if (!snap.exists) return;
+      const d = snap.data();
+      if ((await db.collection(DOCS_COL).doc(id).get()).exists) { alert(IS_KR ? '같은 문서가 이미 있습니다.' : 'Document already exists.'); return; }
+      const { deletedBy, deletedAt, restoredBy, restoredAt, ...orig } = d;
+      if (d.assetTxId && d.status === 'approved') alert(IS_KR ? '※ 강제삭제 때 지워진 자산관리 거래는 자동으로 돌아오지 않습니다. 자산관리 › 설정 › 휴지통에서 따로 복원하세요.' : 'Note: the linked asset transaction is not restored automatically — restore it from Asset Manager › Settings › Trash.');
+      await db.collection(DOCS_COL).doc(id).set({ ...orig, history: [...(orig.history || []), { action: 'restored', by: currentUser.id, at: Date.now(), comment: IS_KR ? '휴지통에서 복원' : 'Restored from trash' }] });
+      await db.collection(DOCS_COL + '_deleted').doc(id).set({ restoredBy: currentUser.id, restoredAt: Date.now() }, { merge: true });
+      alert(IS_KR ? '✓ 복원됐습니다.' : '✓ Restored.'); openTrash();
+    });
+  }
+  ov.style.display = 'flex';
+  const body = ov.querySelector('#trashBody'); body.textContent = IS_KR ? '불러오는 중…' : 'Loading…';
+  const qs = await db.collection(DOCS_COL + '_deleted').orderBy('deletedAt', 'desc').limit(300).get();
+  const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const fmt = t => t ? new Date(t).toLocaleString() : '';
+  const rows = qs.docs.map(x => ({ id: x.id, ...x.data() }));
+  body.innerHTML = rows.length ? '<table style="width:100%;border-collapse:collapse;">' + rows.map(d => '<tr style="border-top:1px solid #2a2a2a;">'
+    + '<td style="padding:6px;white-space:nowrap;color:#999;">' + esc(fmt(d.deletedAt)) + '</td>'
+    + '<td style="padding:6px;white-space:nowrap;">' + esc(d.docNo) + '</td>'
+    + '<td style="padding:6px;">' + esc(d.title) + ' <span style="color:#888;">(' + esc(d.status) + ')</span></td>'
+    + '<td style="padding:6px;white-space:nowrap;color:#999;">' + esc(d.deletedBy) + '</td>'
+    + '<td style="padding:6px;text-align:right;white-space:nowrap;">' + (d.restoredAt ? '<span style="color:#4caf50;">' + (IS_KR ? '복원됨' : 'Restored') + '</span>' : '<button class="btn-sm btn-sm-outline" data-restore="' + esc(d.id) + '">↩ ' + (IS_KR ? '복원' : 'Restore') + '</button>') + '</td></tr>').join('') + '</table>'
+    : '<div style="padding:16px;color:#888;">' + (IS_KR ? '비어 있습니다.' : 'Empty.') + '</div>';
 }
 
 // ── USERS ──
