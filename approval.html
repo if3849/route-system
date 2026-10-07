@@ -3868,7 +3868,7 @@ function viewDoc(docId) {
       ).join('')
     : '<span style="color:var(--mid);font-size:0.85rem;">No attachments</span>';
 
-  const historyHtml = doc.history.filter(h => h.action !== 'draft_updated').map(h => {   // 예전에 쌓인 임시저장 수정 이력은 숨김
+  const historyHtml = doc.history.filter(h => h.action !== 'draft' && h.action !== 'draft_updated').map(h => {   // 임시저장·임시저장 수정 이력은 숨김 (상신부터 표시)
     const cls = h.action==='approved'?'h-approved'
               : h.action==='rejected'?'h-rejected'
               : h.action==='resubmitted'?'h-resubmitted'
