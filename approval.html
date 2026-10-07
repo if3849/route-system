@@ -1750,6 +1750,9 @@ function poOptions(selectedId) {
     }).join('');
 }
 // 비용청구 사전승인 판정: {mode:'po'|'exempt'|'none', exemptReason, overagePct}
+function isBillPayment(sd) { return !!(sd && (sd.viId || sd.paymentMethod === '법인통장')); }
+// 저장된 문서의 사전승인 상태 — 예전에 'none'으로 저장된 벤더 인보이스/계좌이체 건도 면제로 표시
+function preApprovalMode(sd) { return (sd && sd.preApproval === 'none' && isBillPayment(sd)) ? 'exempt' : (sd && sd.preApproval); }
 function evalPreApproval(sd) {
   sd = sd || {};
   const amount = parseFloat(sd.amount) || 0;
@@ -1758,6 +1761,8 @@ function evalPreApproval(sd) {
     const over = est > 0 ? Math.round((amount - est) / est * 100) : 0;
     return { mode: 'po', overagePct: over, isOver: est > 0 && over > (poPolicy.overagePct || 0) };
   }
+  // 벤더 인보이스 · 법인통장(계좌이체) = 결재 승인 후 송금 → 결재 자체가 사전승인 (매장 카드결제 정책 대상 아님)
+  if (isBillPayment(sd)) return { mode: 'exempt', exemptReason: sd.viId ? '벤더 인보이스 — 결재 승인 후 송금' : '법인통장 계좌이체 — 결재 승인 후 송금' };
   if (sd.category && (poPolicy.exemptCategories || []).includes(sd.category)) return { mode: 'exempt', exemptReason: '카테고리 면제 (' + sd.category + ')' };
   if (amount > 0 && amount <= (poPolicy.exemptAmount || 0)) return { mode: 'exempt', exemptReason: '소액 면제 (' + fmtCUR(poPolicy.exemptAmount) + ' 이하)' };
   return { mode: 'none' };
@@ -1767,7 +1772,7 @@ function preApprovalBadge(doc) {
   const sd = doc && doc.structuredData;
   if (!sd || sd.kind !== 'card_expense' || !sd.preApproval) return '';
   let h = '';
-  if (sd.preApproval === 'none') {
+  if (preApprovalMode(sd) === 'none') {
     h += ` <span class="status-badge status-rejected" style="font-size:0.65rem;padding:0.15rem 0.4rem;" title="구매요청(사전승인) 없이 결제한 건 — 사유: ${escHtml(sd.noPoReason||'')}">⚠️ ${IS_KR?'사전승인 없음':'No Pre-approval'}</span>`;
   } else if (sd.preApproval === 'po') {
     const ev = evalPreApproval(sd);
@@ -1799,7 +1804,7 @@ function preApprovalDetailRowCore(doc, sd, label) {
       const ev = evalPreApproval(sd);
       val = `<span style="color:#10b981;">✓ ${escHtml(sd.poDocNo)}</span> <span style="color:var(--mid);">(예상 ${fmtCUR(sd.poAmount)} → 실제 ${fmtCUR(sd.amount)})</span>` +
             (ev.isOver ? ` <span class="status-badge status-pending" style="font-size:0.65rem;">📈 +${ev.overagePct}% 초과</span>` : '');
-    } else if (sd.preApproval === 'exempt') {
+    } else if (preApprovalMode(sd) === 'exempt') {
       val = `<span style="color:var(--mid);">면제 — ${escHtml(evalPreApproval(sd).exemptReason || '')}</span>`;
     } else {
       val = `<span class="status-badge status-rejected" style="font-size:0.7rem;">⚠️ ${IS_KR?'사전승인 없음':'No Pre-approval'}</span> <span style="color:var(--light);">사유: ${escHtml(sd.noPoReason || '(미기재)')}</span>`;
@@ -1819,7 +1824,7 @@ function preApprovalWarnings(doc) {
   const sd = doc && doc.structuredData;
   if (!sd || sd.kind !== 'card_expense') return [];
   const w = [];
-  if (sd.preApproval === 'none') w.push('⚠️ 사전승인(구매요청) 없이 결제한 건입니다. 사유: ' + (sd.noPoReason || '(미기재)'));
+  if (preApprovalMode(sd) === 'none') w.push('⚠️ 사전승인(구매요청) 없이 결제한 건입니다. 사유: ' + (sd.noPoReason || '(미기재)'));
   if (sd.preApproval === 'po') {
     const ev = evalPreApproval(sd);
     if (ev.isOver) w.push(`📈 구매요청 ${sd.poDocNo} 예상액 ${fmtCUR(sd.poAmount)} 대비 +${ev.overagePct}% 초과 (실제 ${fmtCUR(sd.amount)})`);
@@ -2552,7 +2557,8 @@ function updateExpensePoStatus() {
   const box = document.getElementById('se_po_status');
   const wrap = document.getElementById('se_noPo_wrap');
   const sd = { poDocId: v('se_po'), poDocNo: v('se_poDocNo'), poAmount: v('se_poAmount'),
-               category: v('se_category'), amount: parseFormattedNumber(v('se_amount')) };
+               category: v('se_category'), amount: parseFormattedNumber(v('se_amount')),
+               paymentMethod: v('se_paymentMethod'), viId: (window.viPrefill && window.viPrefill.viId) || '' };
   const ev = evalPreApproval(sd);
   if (!box) return ev;
   if (ev.mode === 'po') {
@@ -2603,6 +2609,7 @@ function collectStructuredData() {
              paymentMethod:v('se_paymentMethod'),
              poDocId:v('se_po')||'', poDocNo:v('se_poDocNo')||'', poAmount:parseFormattedNumber(v('se_poAmount'))||0,
              noPoReason:(v('se_noPoReason')||'').trim() };
+    if (window.viPrefill && window.viPrefill.viId) base.viId = window.viPrefill.viId;
     const ev = evalPreApproval(base);
     base.preApproval = ev.mode;                       // 'po' | 'exempt' | 'none'
     if (ev.mode !== 'none') base.noPoReason = '';     // 면제/PO 연결이면 사유 불필요
