@@ -3770,7 +3770,7 @@ async function submitDoc(status) {
       status: isDraftSave ? 'draft' : 'pending',
       attachments: [...uploadedFiles],
       structuredData: structuredData || oldDoc.structuredData || null,
-      history: [
+      history: isDraftSave ? (oldDoc.history || []) : [   // 상신 전 임시저장 수정은 이력에 남기지 않음 (2026-10-06)
         ...(oldDoc.history || []),
         { action: histAction, by: currentUser.id, at: Date.now(), comment: histComment }
       ]
@@ -3868,7 +3868,7 @@ function viewDoc(docId) {
       ).join('')
     : '<span style="color:var(--mid);font-size:0.85rem;">No attachments</span>';
 
-  const historyHtml = doc.history.map(h => {
+  const historyHtml = doc.history.filter(h => h.action !== 'draft_updated').map(h => {   // 예전에 쌓인 임시저장 수정 이력은 숨김
     const cls = h.action==='approved'?'h-approved'
               : h.action==='rejected'?'h-rejected'
               : h.action==='resubmitted'?'h-resubmitted'
