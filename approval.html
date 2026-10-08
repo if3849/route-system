@@ -4023,7 +4023,9 @@ async function selfApproveIfOwnTurn(doc) {
 async function processApproval(doc, action, comment) {
   const step = doc.currentStep || 0;
   // 이미 처리된 단계면 무시 (이중 승인 → 이중 sync 방지)
-  if (doc.status !== 'pending' || !doc.approvers[step] || doc.approvers[step].status !== 'pending') return { syncMsg: '', stepNum: step, skipped: true };
+  // 질의중(info_requested)도 결재자가 바로 승인/반려 가능 — 답변을 기다리지 않음
+  if ((doc.status !== 'pending' && doc.status !== 'info_requested') || !doc.approvers[step] || doc.approvers[step].status !== 'pending') return { syncMsg: '', stepNum: step, skipped: true };
+  if (doc.status === 'info_requested') { doc.status = 'pending'; doc.infoRequest = null; }
   doc.approvers[step].status = action === 'approve' ? 'approved' : 'rejected';
   doc.approvers[step].comment = comment;
   doc.approvers[step].at = Date.now();
