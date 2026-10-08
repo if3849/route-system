@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Route System Inc. — Engineering Excellence</title>
+  <link rel="icon" href="mark.png">
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -27,6 +28,10 @@
     }
     .nav-logo { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 3px; color: var(--white); text-decoration: none; }
     .nav-logo span { color: var(--accent); }
+    .nav-logo { display:inline-flex; align-items:center; }
+    .nav-logo-img { height:38px; width:auto; display:block; }
+    .footer-logo-img { height:32px; width:auto; display:block; }
+    @media (max-width:768px) { .nav-logo-img { height:30px; } }
     .nav-links { display: flex; gap: 2.5rem; list-style: none; }
     .nav-links a { font-family: 'Barlow Condensed', sans-serif; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: var(--light); text-decoration: none; transition: color 0.2s; position: relative; }
     .nav-links a::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 1px; background: var(--accent); transition: width 0.3s; }
@@ -227,7 +232,7 @@
 <body>
 
 <nav>
-  <a href="#hero" class="nav-logo">ROUTE <span>SYSTEM</span></a>
+  <a href="#hero" class="nav-logo"><img src="logo-white.svg?v=2026b" alt="Route System" class="nav-logo-img"></a>
   <ul class="nav-links">
     <li><a href="#about">About</a></li>
     <li><a href="#services">Services</a></li>
@@ -477,7 +482,7 @@
 </section>
 
 <footer>
-  <div class="footer-logo">ROUTE <span>SYSTEM</span> INC.</div>
+  <div class="footer-logo"><img src="logo-white.svg?v=2026b" alt="Route System Inc." class="footer-logo-img"></div>
   <div class="footer-copy">© 2025 Route System Inc. All rights reserved.</div>
   <a href="approval.html" style="font-family:'Barlow Condensed',sans-serif;font-size:0.75rem;letter-spacing:2px;text-transform:uppercase;color:var(--mid);text-decoration:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--mid)'">Staff Login →</a>
 </footer>
