@@ -1009,9 +1009,11 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   renderBranchSwitch(document.getElementById('branchSwitch'), false);
   renderBranchSwitch(document.getElementById('branchSwitchApp'), true);
-  if (IS_KR) {
+  (function () {  // 상단바 법인 배지 — US/KR 동일 모양
     var el = document.getElementById('branchBadge');
-    if (el) { el.textContent = '  🇰🇷 한국법인 (주)라우트시스템'; el.style.color = '#c8a96e'; el.style.fontWeight = '700'; el.style.fontSize = '0.8rem'; }
+    if (el) { el.textContent = IS_KR ? '  🇰🇷 한국법인 (주)라우트시스템' : '  🇺🇸 미국법인 Route System Inc.'; el.style.color = '#c8a96e'; el.style.fontWeight = '700'; el.style.fontSize = '0.8rem'; }
+  })();
+  if (IS_KR) {
     document.title = '(주)라우트시스템 — 전자결재 (한국)';
     var hs = document.querySelector('#hubScreen .hub-subtitle'); if (hs) hs.textContent = '🇰🇷 (주)라우트시스템 · 한국지사 포털';
     var ls = document.querySelector('#loginScreen .login-sub'); if (ls) ls.textContent = '🇰🇷 (주)라우트시스템 · 한국지사';
