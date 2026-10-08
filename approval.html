@@ -7,6 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
   <title>Route System Inc. — Approval System</title>
+<link rel="icon" href="mark.png">
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet"/>
   <!-- xlsx(약 900KB)는 엑셀 내보내기 때만 지연 로딩 → 로그인 화면이 즉시 뜸 (loadXLSX 참고) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -130,6 +131,14 @@
     .topbar-logo { font-family:'Bebas Neue',sans-serif; font-size:1.3rem; letter-spacing:3px; }
     .topbar-logo a { color:var(--white); text-decoration:none; }
     .topbar-logo span { color:var(--accent); }
+    /* 이미지 로고 (2026-10 새 CI, 어두운 배경용 흰 글자) */
+    .logo-img { display:block; width:auto; max-width:100%; }
+    .logo-img.lg-login { height:44px; margin:0 auto 0.6rem; }
+    .logo-img.lg-hub { height:72px; margin:0 auto 0.6rem; }
+    .logo-img.lg-bar { height:26px; }
+    .topbar-logo { display:flex; align-items:center; gap:0.5rem; }
+    .topbar-logo-link { display:inline-flex; align-items:center; }
+    @media (max-width:600px) { .logo-img.lg-hub { height:52px; } .logo-img.lg-bar { height:21px; } }
     .topbar-right { display:flex; align-items:center; gap:1.5rem; }
     .topbar-user { font-size:0.85rem; color:var(--light); display:flex; align-items:center; gap:0.5rem; }
     .user-dot { width:8px; height:8px; background:var(--green); border-radius:50%; }
@@ -368,7 +377,7 @@
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-box">
-    <div class="login-logo">ROUTE <span>SYSTEM</span></div>
+    <div class="login-logo"><img class="logo-img lg-login" src="logo-white.svg?v=2026b" alt="ROUTE SYSTEM"></div>
     <div class="login-sub">Approval System</div>
     <div class="login-error" id="loginError">Invalid ID or password.</div>
     <div class="login-error" id="loginLoadingError" style="background:rgba(200,169,110,0.1);border-color:var(--accent);color:var(--accent);">
@@ -389,7 +398,7 @@
 <!-- HUB SCREEN -->
 <div id="hubScreen">
   <div class="hub-topbar">
-    <div class="hub-topbar-logo">ROUTE <span>SYSTEM</span></div>
+    <div class="hub-topbar-logo"><img class="logo-img lg-bar" src="logo-white.svg?v=2026b" alt="ROUTE SYSTEM"></div>
     <div class="hub-topbar-right">
       <div class="hub-topbar-user" id="hubUser">—</div>
       <span id="branchSwitch"></span>
@@ -397,7 +406,7 @@
     </div>
   </div>
   <div class="hub-content">
-    <div class="hub-logo">ROUTE <span>SYSTEM</span></div>
+    <div class="hub-logo"><img class="logo-img lg-hub" src="logo-white.svg?v=2026b" alt="ROUTE SYSTEM"></div>
     <div class="hub-subtitle">Integrated Staff Portal</div>
     <div class="hub-cards">
       <div class="hub-card" onclick="enterApproval()">
@@ -450,7 +459,7 @@
 <!-- APP -->
 <div id="app">
   <div class="topbar">
-    <div class="topbar-logo"><span class="nav-toggle" onclick="toggleNav()" title="메뉴">☰</span><a href="index.html">ROUTE <span>SYSTEM</span></a><span class="topbar-logo-sub"> — APPROVAL</span><span id="branchBadge"></span></div>
+    <div class="topbar-logo"><span class="nav-toggle" onclick="toggleNav()" title="메뉴">☰</span><a href="index.html" class="topbar-logo-link"><img class="logo-img lg-bar" src="logo-white.svg?v=2026b" alt="ROUTE SYSTEM"></a><span class="topbar-logo-sub"> — APPROVAL</span><span id="branchBadge"></span></div>
     <div class="topbar-right">
       <div class="topbar-user"><div class="user-dot"></div><span id="topbarUser">—</span></div>
       <span id="branchSwitchApp" style="margin-right:4px;"></span>
