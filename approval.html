@@ -491,6 +491,7 @@
         <div><div class="page-title-tag">Overview</div><div class="page-title">DASHBOARD</div></div>
         <button class="btn btn-gold" onclick="showPage('new')">+ New Document</button>
       </div>
+      <div id="syncFailBanner" style="display:none;margin-bottom:1rem;padding:0.8rem 1rem;border:1px solid var(--red);background:rgba(239,68,68,0.08);border-radius:6px;font-size:0.85rem;"></div>
       <div class="stats-grid">
         <div class="stat-card gold clickable" onclick="goAllDocs('')"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Total</div></div>
         <div class="stat-card gold clickable" onclick="goAllDocs('pending')"><div class="stat-num" id="stat-pending" style="color:var(--accent)">0</div><div class="stat-label">Pending</div></div>
@@ -2983,6 +2984,43 @@ function renderDashboard() {
   document.getElementById('stat-approved').textContent = visible.filter(d => d.status === 'approved').length;
   document.getElementById('stat-rejected').textContent = visible.filter(d => d.status === 'rejected' || hasBeenRejected(d)).length;
   renderTable('recentTable', [...visible].sort((a,b) => b.createdAt - a.createdAt).slice(0, 8), 'all');
+  renderSyncFailBanner();
+}
+
+// ★ 자산관리 미반영(동기화 실패) 승인 문서 — 관리자 대시보드 경고 + 재연동 (2026-10-09, RSI-0611 누락 건 계기)
+function isSyncFailed(doc) {
+  return doc.status === 'approved' && doc.syncStatus === 'failed' && !doc.assetTxId
+    && !String(doc.syncError || '').startsWith('duplicate_doc_no');   // 채번 중복은 이미 자산에 같은 번호 거래가 있음 — 재연동 대상 아님
+}
+function renderSyncFailBanner() {
+  const el = document.getElementById('syncFailBanner'); if (!el) return;
+  const list = (currentUser && currentUser.role === 'Admin') ? docs.filter(isSyncFailed) : [];
+  if (!list.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div style="color:var(--red);font-weight:700;margin-bottom:0.4rem;">⚠ ${IS_KR?'자산관리 미반영 승인 문서':'Approved but NOT in Asset Manager'} ${list.length}${IS_KR?'건':''}</div>`
+    + list.sort((a,b) => b.createdAt - a.createdAt).map(d =>
+      `<div style="display:flex;align-items:center;gap:0.6rem;margin:0.25rem 0;flex-wrap:wrap;">
+        <span>${escHtml(d.docNo)} · ${escHtml(d.title)} · ${fmtCUR(docAssetAmount(d))}</span>
+        <span style="color:var(--text-dim);font-size:0.75rem;">${escHtml(d.syncError||'')}</span>
+        <button class="btn-sm" style="background:#2563eb;color:#fff;" onclick="resyncDoc('${d.id}')">🔄 ${IS_KR?'재연동':'Retry Sync'}</button>
+        <button class="btn-sm btn-sm-outline" onclick="viewDoc('${d.id}')">View</button>
+      </div>`).join('');
+}
+async function resyncDoc(docId) {
+  const doc = docs.find(d => d.id === docId); if (!doc) return;
+  if (doc.assetTxId) { alert(IS_KR ? '이미 자산관리에 반영된 문서입니다.' : 'Already synced.'); return; }
+  if (!confirm((IS_KR ? '자산관리에 다시 입력할까요?\n' : 'Send to Asset Manager again?\n') + doc.docNo + ' · ' + doc.title + ' · ' + fmtCUR(docAssetAmount(doc)))) return;
+  // 이전 실패가 네트워크 오류였다면 실제로는 서버에 들어갔을 수 있음 → 같은 번호 거래가 있으면 그것으로 연결
+  const res = await syncDocToAssetManager(doc, { acceptExisting: String(doc.syncError || '').startsWith('network') });
+  if (res.ok) {
+    doc.assetTxId = res.tx_id; doc.syncStatus = 'synced'; doc.syncedAt = Date.now(); delete doc.syncError;
+    await saveDoc(doc); saveData();
+    alert((IS_KR ? '✓ 자산관리 입력 완료 (TX ' : '✓ Synced (TX ') + res.tx_id.slice(0,8) + ')');
+  } else {
+    doc.syncError = res.error || 'unknown'; await saveDoc(doc); saveData();
+    alert((IS_KR ? '⚠️ 재연동 실패: ' : '⚠️ Retry failed: ') + (res.error || ''));
+  }
+  refreshAll();
 }
 
 // ── PROGRESS ──
@@ -3017,6 +3055,10 @@ function statusBadgeFor(doc) {
   }
   // ★ 비용청구: 사전승인 없음 / 예상액 초과 배지
   html += preApprovalBadge(doc);
+  // ★ 승인됐지만 자산관리 동기화 실패
+  if (isSyncFailed(doc)) {
+    html += ` <span class="status-badge status-rejected" style="font-size:0.65rem;padding:0.15rem 0.4rem;" title="${escHtml(doc.syncError||'')}">⚠ ${IS_KR?'자산 미반영':'Not in Assets'}</span>`;
+  }
   // ★ 환불 이력 있는 원 결재 / 환불 문서
   if (doc.refunds && doc.refunds.length) {
     html += ` <span class="status-badge status-approved" style="font-size:0.65rem;padding:0.15rem 0.4rem;" title="${doc.refunds.map(r => r.docNo + ' ' + fmtCUR(r.amount)).join(', ')}">↩ ${IS_KR?'환불':'Refund'} ${fmtCUR(refundedTotal(doc))}</span>`;
@@ -3117,6 +3159,10 @@ function buildActions(doc, mode) {
   }
   if (mode === 'mine' && (doc.status === 'draft' || doc.status === 'pending' || doc.status === 'rejected' || doc.status === 'info_requested')) {
     b += ` <button class="btn-sm btn-sm-outline" onclick="deleteDoc('${doc.id}')">Delete</button>`;
+  }
+  // ★ 자산관리 동기화 실패 — 관리자 재연동
+  if (currentUser && currentUser.role === 'Admin' && isSyncFailed(doc)) {
+    b += ` <button class="btn-sm" style="background:#2563eb;color:#fff;font-weight:600;" onclick="resyncDoc('${doc.id}')">🔄 ${IS_KR?'재연동':'Retry Sync'}</button>`;
   }
   // ★ 강제 삭제(대표 전용): 승인된 문서도 자산관리 연동 거래와 함께 삭제
   if (canForceDelete() && doc.status === 'approved') {
@@ -4240,7 +4286,7 @@ async function settleLinkedPo(doc) {
 }
 
 // ── 자산관리 자동 입력 (최종 승인 시 호출) ──
-async function syncDocToAssetManager(doc) {
+async function syncDocToAssetManager(doc, opts = {}) {
   const sd = doc.structuredData || {};
   const kind = sd.kind;
   if (!kind) return { ok:false, error:'no structured data' };
@@ -4316,24 +4362,38 @@ async function syncDocToAssetManager(doc) {
     payload.amount = sd.amount;
     payload.note = doc.content || '';
   }
-  try {
-    const r = await fetch(ASSET_API_BASE + '/sync-asset-manager', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, branch: BRANCH })
-    });
-    const j = await r.json().catch(() => ({}));
-    if (r.ok && j.asset_response && j.asset_response.success) {
-      return { ok:true, tx_id: j.asset_response.tx_id };
+  // ★ 자동 재시도 (2026-10-09): 네트워크 순간 끊김·서버 502는 최대 3회(0s → 3s → 8s).
+  //    자산관리는 source_doc_no 중복을 거부하므로 재시도해도 이중 입력되지 않음.
+  //    앞 시도가 실제로는 들어갔는데 응답만 못 받은 경우 → 재시도에서 already_synced = 성공으로 간주.
+  const delays = [0, 3000, 8000];
+  let last = { ok:false, error:'unknown' }, hadNetErr = !!opts.acceptExisting;
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i]) await new Promise(res => setTimeout(res, delays[i]));
+    try {
+      const r = await fetch(ASSET_API_BASE + '/sync-asset-manager', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, branch: BRANCH })
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.asset_response && j.asset_response.success) {
+        return { ok:true, tx_id: j.asset_response.tx_id };
+      }
+      if (j.asset_response && j.asset_response.error === 'already_synced') {
+        if (hadNetErr && j.asset_response.tx_id) return { ok:true, tx_id: j.asset_response.tx_id };
+        // 동일 docNo로 이미 다른 거래가 등록된 경우 — 채번 중복 가능성. 실패로 표시해서 인지 가능하게.
+        return { ok:false, error:'duplicate_doc_no (same docNo already synced as tx ' + (j.asset_response.tx_id||'?') + ')' };
+      }
+      last = { ok:false, error: (j.asset_response && j.asset_response.error) || j.error || 'HTTP '+r.status };
+      const st = j.status || r.status;   // 서버는 자산관리 응답코드를 j.status로 전달 (자산 4xx도 HTTP 502로 감싸 옴)
+      if (st < 500) return last;         // 4xx 등 데이터 문제는 재시도해도 같음
+      hadNetErr = true;                  // 502 = 서버가 자산관리에 못 닿음 (들어갔을 수도 있음)
+    } catch(e) {
+      last = { ok:false, error: 'network: ' + e.message };
+      hadNetErr = true;
     }
-    if (j.asset_response && j.asset_response.error === 'already_synced') {
-      // 동일 docNo로 이미 다른 거래가 등록된 경우 — 채번 중복 가능성. 실패로 표시해서 인지 가능하게.
-      return { ok:false, error:'duplicate_doc_no (same docNo already synced as tx ' + (j.asset_response.tx_id||'?') + ')' };
-    }
-    return { ok:false, error: (j.asset_response && j.asset_response.error) || j.error || 'HTTP '+r.status };
-  } catch(e) {
-    return { ok:false, error: 'network: ' + e.message };
   }
+  return last;
 }
 
 async function deleteDoc(docId) {
