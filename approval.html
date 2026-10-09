@@ -1121,6 +1121,7 @@ window.addEventListener('load', function() {
           if (!user) { try { var snap = await db.collection('users').doc(email).get(); if (snap.exists) user = snap.data(); } catch(_) {} }
           if (!user) user = { id: email, name: u.displayName || email, email: email, role: 'Staff', firebase_uid: u.uid };
           currentUser = user;
+          if (window.startDocsSync) window.startDocsSync();
           revealLogin();
           document.getElementById('loginScreen').style.display = 'none';
           document.getElementById('hubScreen').style.display = 'flex';
@@ -1198,6 +1199,11 @@ window.addEventListener('load', function() {
       }
     });
 
+    // 결재 문서 전체 구독은 로그인 후에만 시작 (2026-10-09) — 허브 첫 화면·앱 재로그인(reauth) 때 1.4MB/650건을
+    // 먼저 받느라 로그인(사용자 목록 로딩)이 늦어지고 Firestore 읽기도 낭비되던 문제. 문서는 로그인 후 화면에서만 씀.
+    window.startDocsSync = function() {
+    if (window._docsSyncStarted) return;
+    window._docsSyncStarted = true;
     db.collection(DOCS_COL).onSnapshot(snapshot => {
       docs = [];
       snapshot.forEach(d => docs.push(d.data()));
@@ -1214,6 +1220,7 @@ window.addEventListener('load', function() {
       console.error('Firebase documents sync error:', err);
       showFirebaseError();
     });
+    };
 
     db.collection(TEMPLATES_COL).onSnapshot(snapshot => {
       templates = [];
@@ -1505,6 +1512,7 @@ async function doLogin() {
     }
     if (!user) user = { id: email, name: cred.user.displayName || email, email: email, role: 'Staff', firebase_uid: cred.user.uid };
     currentUser = user;
+    if (window.startDocsSync) window.startDocsSync();
     document.getElementById('loginError').style.display = 'none';
     document.getElementById('loginLoadingError').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'none';
