@@ -4400,7 +4400,11 @@ async function deleteDoc(docId) {
   const doc = docs.find(d => d.id === docId); if (!doc) return;
   if (!confirm(IS_KR ? '이 문서를 삭제하시겠습니까?' : 'Delete this document?')) return;
   // ★ 삭제 인터록 (2026-10-01): 상신된 문서(대기·반려·질의)는 회사 공통 삭제 비밀번호 필요. 임시저장은 제외
-  if (doc.status !== 'draft' && !(await requireDeletePw())) return;
+  //   (2026-10-15) 본인이 올린 문서 중 아직 아무 결재자도 승인 안 한 건은 비번 없이 삭제 (휴지통 보관은 동일)
+  const ownUnapproved = sameId(doc.requesterId, currentUser.id)
+    && doc.status !== 'approved'
+    && !(doc.approvers || []).some(a => a && a.status === 'approved');
+  if (doc.status !== 'draft' && !ownUnapproved && !(await requireDeletePw())) return;
   await archiveDeleted(doc);
   await removeDoc(docId);
   alert(IS_KR ? '✓ 문서가 삭제됐습니다. (휴지통에 보관)' : '✓ Document deleted (kept in Trash).');
