@@ -159,7 +159,7 @@
     .page-title-tag { font-family:'Barlow Condensed',sans-serif; font-size:0.7rem; letter-spacing:3px; text-transform:uppercase; color:var(--accent); margin-bottom:0.3rem; }
     .page-title { font-family:'Bebas Neue',sans-serif; font-size:2.2rem; letter-spacing:2px; }
 
-    .stats-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:1px; background:var(--dark3); margin-bottom:2rem; }
+    .stats-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:1px; background:var(--dark3); margin-bottom:2rem; }
     .stat-card { background:var(--dark); padding:1.5rem; position:relative; }
     .stat-card::before { content:''; position:absolute; top:0; left:0; width:3px; height:100%; }
     .stat-card.gold::before { background:var(--accent); }
@@ -498,6 +498,7 @@
         <div class="stat-card orange clickable" onclick="goAllDocs('info_requested')"><div class="stat-num" id="stat-info">0</div><div class="stat-label">Info Req</div></div>
         <div class="stat-card green clickable" onclick="goAllDocs('approved')"><div class="stat-num" id="stat-approved">0</div><div class="stat-label">Approved</div></div>
         <div class="stat-card red clickable" onclick="goAllDocs('rejected')"><div class="stat-num" id="stat-rejected">0</div><div class="stat-label">Rejected</div></div>
+        <div class="stat-card orange clickable" onclick="goAllDocs('po_unbilled')" title="구매요청 승인 후 아직 비용청구(정산)하지 않은 건 / Approved purchase requests not yet billed"><div class="stat-num" id="stat-pounbilled">0</div><div class="stat-label">Unbilled PO</div></div>
       </div>
       <div class="table-wrap">
         <div class="table-toolbar"><div class="table-title">Recent Documents</div></div>
@@ -977,7 +978,7 @@ var _KRDICT = {
   'Dashboard':'대시보드','New Document':'새 문서','My Documents':'내 문서','Pending Approval':'결재 대기','All Documents':'전체 문서','Users':'사용자','Settings':'설정',
   'DASHBOARD':'대시보드','NEW DOCUMENT':'새 문서','MY DOCUMENTS':'내 문서','PENDING APPROVAL':'결재 대기','ALL DOCUMENTS':'전체 문서','USERS':'사용자 관리','SETTINGS':'설정',
   'Overview':'개요','Create':'작성','My':'내','Action Required':'조치 필요','Everything':'전체','Admin':'관리자','Manager':'매니저','Staff':'직원',
-  'Total':'전체','Pending':'대기','Approved':'승인','Rejected':'반려','Info Req':'질의중',
+  'Total':'전체','Pending':'대기','Approved':'승인','Rejected':'반려','Info Req':'질의중','Unbilled PO':'미청구 구매요청',
   'Recent Documents':'최근 문서','Documents I Submitted':'내가 올린 문서','Documents Awaiting Your Approval':'내 결재 대기 문서','Complete Document Log':'전체 문서 이력',
   'Doc No.':'문서번호','Title':'제목','Type':'종류','Requester':'기안자','Progress':'진행','Date':'날짜','Status':'상태','Action':'처리','Priority':'우선순위','My Step':'내 차례','Name':'이름','Full Name':'이름','Email':'이메일','Email Address':'이메일 주소','Role':'권한','Step':'단계','History':'이력','Content':'내용','Content / Details':'내용 / 상세','Attachments':'첨부파일','Document Detail':'문서 상세','Approval Line':'결재라인','CC':'참조',
   '+ New Document':'+ 새 문서','+ New':'+ 새로','Submit for Approval →':'결재 상신 →','Save as Draft':'임시저장','✕ Cancel':'✕ 취소','Save Changes →':'변경 저장 →','Save Template →':'템플릿 저장 →','Send Test Email':'테스트 메일 발송','Add User':'사용자 추가','Add User →':'사용자 추가 →','New Approval Line Template':'새 결재라인 템플릿','Approve':'승인','Approve Document':'문서 승인','Reject':'반려','Edit':'수정','Edit User':'사용자 수정','Delete':'삭제','Remove':'제거','Cancel':'취소','Close':'닫기','Archive':'보관','View':'보기','Resubmit':'재상신','Recall':'회수',
@@ -1748,6 +1749,17 @@ let poPolicy = JSON.parse(JSON.stringify(PO_POLICY_DEFAULT));
 // 정산 완료 여부 — 비용청구로 정산됐거나(settledBy) Amazon 결제액 갱신 완료
 function isPoSettled(doc) {
   return !!(doc && (doc.settledBy || (doc.history || []).some(h => h.action === 'amount_updated')));
+}
+// 미청구 구매요청: 매장 PO(Amazon 아님, 자산 미반영) 승인됐는데 아직 비용청구로 정산 안 된 건
+function isUnbilledPo(doc) {
+  return !!(doc && doc.status === 'approved' && doc.structuredData && doc.structuredData.kind === 'purchase_request'
+    && !isAmazonDoc(doc) && !doc.assetTxId && !isPoSettled(doc));
+}
+// 최종 승인 후 경과 일수
+function poAgeDays(doc) {
+  const h = (doc.history || []).slice().reverse().find(x => x.action === 'approved');
+  const ts = h ? h.at : (doc.updatedAt || doc.createdAt);
+  return ts ? Math.max(0, Math.floor((Date.now() - ts) / 86400000)) : 0;
 }
 // 비용청구에서 선택 가능한 내 구매요청: 승인됨 + Amazon 아님 + 자산 미반영(신규 흐름) + 미정산
 // (현재 편집 중인 비용청구가 이미 물고 있는 PO는 정산됐어도 포함 — 재편집 시 선택 유지)
@@ -2794,8 +2806,13 @@ function refreshAll() {
   badge.textContent = cnt; badge.style.display = cnt > 0 ? 'inline-block' : 'none';
   // 내가 답변해야 할 질의 건수
   const ansCnt = docs.filter(d => needsMyAnswer(d)).length;
+  // + 승인됐는데 아직 비용청구 안 한 내 구매요청
+  const poCnt = docs.filter(d => sameId(d.requesterId, currentUser.id) && isUnbilledPo(d)).length;
   const mBadge = document.getElementById('mineBadge');
-  if (mBadge) { mBadge.textContent = ansCnt; mBadge.style.display = ansCnt > 0 ? 'inline-block' : 'none'; }
+  if (mBadge) {
+    mBadge.textContent = ansCnt + poCnt; mBadge.style.display = (ansCnt + poCnt) > 0 ? 'inline-block' : 'none';
+    mBadge.title = (IS_KR ? '답변할 질의 ' + ansCnt + '건 · 미청구 구매요청 ' + poCnt + '건' : ansCnt + ' info request(s) · ' + poCnt + ' unbilled PO(s)');
+  }
   refreshTemplateDropdown();
   renderTemplates();
 }
@@ -2816,6 +2833,7 @@ var allStatusFilter = '';
 function matchStatusFilter(d) {
   if (!allStatusFilter) return true;
   if (allStatusFilter === 'rejected') return d.status === 'rejected' || hasBeenRejected(d); // 대시보드 Rejected 집계와 동일 기준
+  if (allStatusFilter === 'po_unbilled') return isUnbilledPo(d);
   return d.status === allStatusFilter;
 }
 function goAllDocs(st) {
@@ -2826,8 +2844,8 @@ function goAllDocs(st) {
 function initStatusSel() {
   const sel = document.getElementById('allStatusSel'); if (!sel) return;
   const L = IS_KR
-    ? {'':'전체 상태', pending:'대기', info_requested:'질의중', approved:'승인', rejected:'반려'}
-    : {'':'All Status', pending:'Pending', info_requested:'Info Req', approved:'Approved', rejected:'Rejected'};
+    ? {'':'전체 상태', pending:'대기', info_requested:'질의중', approved:'승인', rejected:'반려', po_unbilled:'🛍 미청구 구매요청'}
+    : {'':'All Status', pending:'Pending', info_requested:'Info Req', approved:'Approved', rejected:'Rejected', po_unbilled:'🛍 Unbilled PO'};
   sel.innerHTML = Object.keys(L).map(k => `<option value="${k}">${L[k]}</option>`).join('');
   sel.value = allStatusFilter;
 }
@@ -2983,6 +3001,7 @@ function renderDashboard() {
   document.getElementById('stat-info').textContent = visible.filter(d => d.status === 'info_requested').length;
   document.getElementById('stat-approved').textContent = visible.filter(d => d.status === 'approved').length;
   document.getElementById('stat-rejected').textContent = visible.filter(d => d.status === 'rejected' || hasBeenRejected(d)).length;
+  const poEl = document.getElementById('stat-pounbilled'); if (poEl) poEl.textContent = visible.filter(isUnbilledPo).length;
   renderTable('recentTable', [...visible].sort((a,b) => b.createdAt - a.createdAt).slice(0, 8), 'all');
   renderSyncFailBanner();
 }
@@ -3070,7 +3089,8 @@ function statusBadgeFor(doc) {
   if (doc.status === 'approved' && doc.structuredData && doc.structuredData.kind === 'purchase_request' && !isAmazonDoc(doc) && !doc.assetTxId) {
     html += isPoSettled(doc)
       ? ` <span class="status-badge status-approved" style="font-size:0.65rem;padding:0.15rem 0.4rem;" title="비용청구 ${escHtml((doc.settledBy&&doc.settledBy.docNo)||'')}로 정산됨">✓ ${IS_KR?'정산완료':'Settled'}</span>`
-      : ` <span class="status-badge status-pending" style="font-size:0.65rem;padding:0.15rem 0.4rem;" title="구매 후 비용청구로 정산 필요">🛍 ${IS_KR?'구매대기':'To Purchase'}</span>`;
+      : (() => { const n = poAgeDays(doc), old = n >= 14;
+          return ` <span class="status-badge ${old?'status-rejected':'status-pending'}" style="font-size:0.65rem;padding:0.15rem 0.4rem;" title="승인 후 ${n}일째 비용청구 안 됨 — 구매 후 비용청구로 정산 필요 / Approved ${n}d ago, not yet billed">🛍 ${IS_KR?'미청구':'Unbilled'} · ${n}${IS_KR?'일':'d'}</span>`; })();
   }
   return html;
 }
