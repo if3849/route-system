@@ -1084,6 +1084,10 @@ window.addEventListener('load', function() {
 
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    // 브라우저 캐시(IndexedDB) 사용 (2026-10-16) — 문서 650여 건(1.4MB)을 매번 서버에서 통째로 받다 보니
+    // 첫 연결이 가끔 20~35초씩 멈추면 화면이 빈 채로 기다림. 캐시가 있으면 지난번 데이터로 즉시 표시하고
+    // 서버 변경분만 뒤이어 반영. 여러 탭 동시 사용(synchronizeTabs) 허용. 실패(사파리 사생활 모드 등)해도 그냥 서버 모드로 동작.
+    try { db.enablePersistence({ synchronizeTabs: true }).catch(function(e){ console.warn('[firestore] persistence off:', e && e.code); }); } catch(e) {}
 
     // ── 로그인 1회 → 새로고침·지점전환·새 탭 모두 세션 유지 (자동 복원) ──
     // Firebase 세션(LOCAL persistence)이 살아있으면 로그인 화면을 건너뛰고
