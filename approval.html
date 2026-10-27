@@ -1283,6 +1283,8 @@ window.addEventListener('load', function() {
         const sel = document.getElementById('ap_vendor');
         if (sel) sel.innerHTML = vendorOptions(sel.value);
       }
+      const seList = document.getElementById('se_vendor_list');
+      if (seList) seList.innerHTML = vendorDatalistOptions();
     }, err => {
       console.warn('vendor_list sync error, using default:', err);
     });
@@ -1713,7 +1715,13 @@ let categoryWhitelist = JSON.parse(JSON.stringify(CATEGORY_WHITELIST_DEFAULT));
 
 // 구매요청(PO) 벤더 목록 기본값(seed/fallback) — Firestore meta/vendor_list 가 없을 때 사용.
 // { name, amazon(특수 UI 여부), url(승인후 PO복사 버튼이 열 사이트, 선택) }
-const VENDOR_LIST_DEFAULT = [
+// KR은 한국 벤더 기본값 (2026-10-26: KR 새 문서에 미국 벤더가 뜨던 문제)
+const VENDOR_LIST_DEFAULT = IS_KR ? [
+  { name: '쿠팡',        amazon: false, url: 'https://www.coupang.com' },
+  { name: '네이버',      amazon: false, url: 'https://shopping.naver.com' },
+  { name: 'Gmarket',     amazon: false, url: 'https://www.gmarket.co.kr' },
+  { name: '다나와',      amazon: false, url: 'https://www.danawa.com' },
+] : [
   { name: 'Amazon',      amazon: true,  url: '' },
   { name: 'Home Depot',  amazon: false, url: 'https://www.homedepot.com' },
   { name: "Lowe's",      amazon: false, url: 'https://www.lowes.com' },
@@ -1742,6 +1750,10 @@ function vendorOptions(selected) {
       return `<option value="${n}"${v.name === selected ? ' selected' : ''}>${v.name}</option>`;
     }).join('') +
     `<option value="__other__"${known ? '' : ' selected'}>기타 매장 / Other (직접 입력)</option>`;
+}
+// 비용청구 사용처 입력란 자동완성 (KR: 등록 벤더를 후보로 표시, 직접 입력도 가능)
+function vendorDatalistOptions() {
+  return vendorList.map(v => `<option value="${(v.name || '').replace(/"/g, '&quot;')}"></option>`).join('');
 }
 
 // ── 사전승인(구매요청) 정책 ──
@@ -2179,7 +2191,7 @@ function renderCardExpenseForm(d) {
         </div>
         <div><label class="field-label">사용일자 *</label><input class="field-input" type="date" id="se_date" value="${d.date||''}" oninput="renderStructuredContent()"/></div>
         <div><label class="field-label">금액 (${CUR_CODE}) *</label><input class="field-input" type="text" inputmode="decimal" id="se_amount" value="${d.amount?fmtAmt(d.amount):''}" oninput="formatNumberInput(this,${CUR_DEC});renderStructuredContent()" placeholder="${CUR_PH}"/></div>
-        <div><label class="field-label">사용처 / Vendor *</label><input class="field-input" type="text" id="se_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()" placeholder="Amazon, Home Depot, Chevron 등"/></div>
+        <div><label class="field-label">사용처 / Vendor *</label><input class="field-input" type="text" id="se_vendor" value="${d.vendor||''}" oninput="renderStructuredContent()"${IS_KR ? ' list="se_vendor_list"' : ''} placeholder="${IS_KR ? (vendorList.slice(0,3).map(v => v.name).join(', ') || '쿠팡, 네이버') + ', GS칼텍스 등' : 'Amazon, Home Depot, Chevron 등'}"/>${IS_KR ? `<datalist id="se_vendor_list">${vendorDatalistOptions()}</datalist>` : ''}</div>
         <div><label class="field-label">카테고리 *</label><select class="field-input" id="se_category" onchange="renderStructuredContent()">${categoryOptions(d.category,'card_expense')}</select></div>
         <div><label class="field-label">결제수단 *</label><select class="field-input" id="se_paymentMethod" onchange="renderStructuredContent()">${paymentMethodOptions(d.paymentMethod||'', true)}</select></div>
         <div style="grid-column:1/3;"><label class="field-label">프로젝트 *</label><select class="field-input" id="se_project" onchange="renderStructuredContent()">${projectOptions(d.project)}</select></div>
@@ -2367,7 +2379,7 @@ function renderAmazonPurchaseForm(d) {
       <div style="font-size:0.72rem;color:var(--text-dim);background:rgba(255,153,0,0.08);border-left:3px solid #ff9900;padding:6px 10px;border-radius:4px;margin-bottom:0.7rem;">💡 위 <strong>TITLE</strong> 입력란이 품목명이 됩니다 (예: "Dell 27인치 모니터")</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
         <div style="grid-column:1/3;"><label class="field-label">사용처 / Vendor *</label><select class="field-input" id="ap_vendor" onchange="onPurchaseVendorChange()">${vendorOptions(dv)}</select></div>
-        <div id="ap_vendor_other_wrap" style="grid-column:1/3;display:${(dv && !findVendor(dv))?'':'none'};"><label class="field-label">매장명 직접 입력 / Store name *</label><input class="field-input" type="text" id="ap_vendor_other" value="${(dv && !findVendor(dv))?dv.replace(/"/g,'&quot;'):''}" oninput="onPurchaseVendorChange()" placeholder="예: Harbor Freight, Costco, 동네 철물점"/></div>
+        <div id="ap_vendor_other_wrap" style="grid-column:1/3;display:${(dv && !findVendor(dv))?'':'none'};"><label class="field-label">매장명 직접 입력 / Store name *</label><input class="field-input" type="text" id="ap_vendor_other" value="${(dv && !findVendor(dv))?dv.replace(/"/g,'&quot;'):''}" oninput="onPurchaseVendorChange()" placeholder="${IS_KR ? '예: 다이소, 이마트, 동네 철물점' : '예: Harbor Freight, Costco, 동네 철물점'}"/></div>
         <div id="ap_amazon_only" style="grid-column:1/3;display:${isAmz?'':'none'};">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
             <label class="field-label" style="margin-bottom:0;">Amazon 링크</label>
