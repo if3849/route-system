@@ -986,15 +986,41 @@ var _KRDICT = {
   'No documents found.':'문서가 없습니다.','No attachments':'첨부파일 없음','No content':'내용 없음','No email':'이메일 없음','Loading...':'불러오는 중...',
   'Comment (Optional)':'의견 (선택)','Discussion':'의견 · 질의응답','Info Requested':'질의중',
   'User ID':'아이디','Password':'비밀번호','Confirm Password':'비밀번호 확인','New Password':'새 비밀번호','LOGIN →':'로그인 →','Invalid ID or password.':'아이디 또는 비밀번호가 올바르지 않습니다.',
-  '🏠 HOME':'🏠 홈','LOGOUT':'로그아웃','Logout':'로그아웃'
+  '🏠 HOME':'🏠 홈','LOGOUT':'로그아웃','Logout':'로그아웃',
+  '— APPROVAL':'— 전자결재','Trash':'휴지통','Approval System':'전자결재 시스템','Draft':'임시저장','Normal':'보통','High':'높음','Urgent':'긴급',
+  '+ Add User':'+ 사용자 추가','📥 Export Excel':'📥 엑셀 내보내기','📧 Email Notification':'📧 이메일 알림',
+  '✏️ Edit & Resubmit':'✏️ 수정 후 재상신','✓ Apply →':'✓ 적용 →','📝 Content / Details — 확대 편집':'📝 내용 / 상세 — 확대 편집','Content / Details':'내용 / 상세',
+  '* Required for email notifications':'* 이메일 알림 수신에 필요','(blank = keep current)':'(비워두면 현재 비밀번호 유지)',
+  '— Select Approver —':'— 결재자 선택 —','— Select CC —':'— 참조자 선택 —'
 };
-var _KRPLACE = { 'Search...':'검색...','Enter document title':'문서 제목 입력','Describe the purpose and details...':'목적과 상세 내용을 입력하세요...' };
+var _KRPLACE = { 'Search...':'검색...','Enter document title':'문서 제목 입력','Describe the purpose and details...':'목적과 상세 내용을 입력하세요...',
+  'Enter your ID':'아이디 입력','Enter your password':'비밀번호 입력','New password':'새 비밀번호','Re-enter new password':'새 비밀번호 다시 입력','John Smith':'홍길동','johnsmith':'아이디 입력','Leave a comment...':'의견을 남기세요...' };
+// 번역 대상. 문서 제목·본문·의견 같은 사용자 데이터(td, .detail-value)는 넣지 않는다
+var _KRSEL = '.topbar-logo-sub, .sidebar-section, .page-title-tag, .page-title, .stat-label, .table-title, th, .sidebar-item span, td.empty, .empty-state, .field-label, .topbar-logout, .hub-topbar-logout, .modal-title, .modal-header, .detail-label, button, .btn, .btn-sm, .btn-add-approver, label, option[value], .settings-head, summary, #structuredPanel div, #structuredPanel span';
+// "English / 한글" 또는 "한글 / English" 이중 표기 → 한글만 (앞쪽 이모지·기호는 유지)
+function _krDual(t){
+  var m = t.match(/^(.*?)\s+\/\s+(.*)$/); if (!m) return null;
+  var ka = /[가-힣]/.test(m[1]), kb = /[가-힣]/.test(m[2]);
+  if (ka === kb) return null;
+  if (ka) return m[1];
+  var pre = (m[1].match(/^[^A-Za-z0-9가-힣]*/) || [''])[0];
+  return pre + m[2];
+}
+function _krTextNode(tn){
+  var k = (tn.nodeValue || '').trim(); if (!k) return;
+  var v = Object.prototype.hasOwnProperty.call(_KRDICT, k) ? _KRDICT[k] : _krDual(k);
+  if (v != null && v !== k) tn.nodeValue = tn.nodeValue.replace(k, v);
+}
 function translateApprovalKR(root){
   root = root || document;
-  var sel = '.sidebar-section, .page-title-tag, .page-title, .stat-label, .table-title, th, .sidebar-item span, td.empty, .empty-state, .field-label, .topbar-logout, .hub-topbar-logout, .modal-title, .modal-header, .table-title, .detail-label';
-  root.querySelectorAll(sel).forEach(function(el){ if(el.children.length) return; var k=(el.textContent||'').trim(); if(_KRDICT[k]!=null) el.textContent=_KRDICT[k]; });
-  root.querySelectorAll('button, .btn, .btn-sm').forEach(function(b){ if(!b.children.length){ var k=(b.textContent||'').trim(); if(_KRDICT[k]!=null) b.textContent=_KRDICT[k]; } });
-  root.querySelectorAll('input[placeholder]').forEach(function(i){ var k=(i.getAttribute('placeholder')||'').trim(); if(_KRPLACE[k]!=null) i.setAttribute('placeholder',_KRPLACE[k]); });
+  var els = Array.prototype.slice.call(root.querySelectorAll(_KRSEL));
+  if (root.matches && root.matches(_KRSEL)) els.push(root);
+  els.forEach(function(el){
+    // 직계 텍스트만 치환 — 자식 요소가 섞인 라벨(라벨 + <span>)도 처리되고 자식 요소는 그대로 유지
+    for (var c = el.firstChild; c; c = c.nextSibling) if (c.nodeType === 3) _krTextNode(c);
+  });
+  root.querySelectorAll('input[placeholder], textarea[placeholder]').forEach(function(i){ var k=(i.getAttribute('placeholder')||'').trim(); if(_KRPLACE[k]!=null) i.setAttribute('placeholder',_KRPLACE[k]); });
+  root.querySelectorAll('button[title]').forEach(function(b){ var v=_krDual(b.getAttribute('title')||''); if(v!=null) b.setAttribute('title',v); });
 }
 document.addEventListener('DOMContentLoaded', function(){
   // 허브 상단 미국/한국 전환 스위치 (양쪽 모드에서 표시)
@@ -1031,10 +1057,12 @@ document.addEventListener('DOMContentLoaded', function(){
     // 전자결재 앱 화면 한글화 (정적) + 동적 렌더 대응(표/빈문구 등)
     translateApprovalKR();
     try {
-      var _appEl = document.getElementById('app');
-      if (_appEl) new MutationObserver(function (muts) {
-        muts.forEach(function (m) { (m.addedNodes || []).forEach(function (n) { if (n.nodeType === 1) translateApprovalKR(n.parentElement || n); }); });
-      }).observe(_appEl, { childList: true, subtree: true });
+      // 모달(문서 상세·승인 등)은 #app 밖이므로 body 전체를 감시. 변경된 부모별로 1번씩만 처리
+      new MutationObserver(function (muts) {
+        var roots = new Set();
+        muts.forEach(function (m) { if (m.target.nodeType === 1) roots.add(m.target); });
+        roots.forEach(function (r) { translateApprovalKR(r); });
+      }).observe(document.body, { childList: true, subtree: true });
     } catch (e) {}
   }
 });
@@ -1192,7 +1220,7 @@ window.addEventListener('load', function() {
           const updated = users.find(u => u.id === currentUser.id);
           if (updated) {
             currentUser = updated;
-            document.getElementById('topbarUser').textContent = updated.name + ' (' + updated.role + ')';
+            document.getElementById('topbarUser').textContent = updated.name + ' (' + roleLabel(updated.role) + ')';
           }
           renderUsers();
           refreshAll();
@@ -1441,7 +1469,7 @@ function applyExpandEditor() {
 }
 function updateCharCount() {
   const len = document.getElementById('expandEditorText').value.length;
-  document.getElementById('expandCharCount').textContent = len.toLocaleString() + ' characters';
+  document.getElementById('expandCharCount').textContent = len.toLocaleString() + (IS_KR ? '자' : ' characters');
 }
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.getElementById('expandEditorModal').classList.contains('open')) closeExpandEditor();
@@ -1476,7 +1504,7 @@ async function sendEmail(toId, doc, action, comment) {
         requester: requester ? requester.name : doc.requesterId,
         action: action,
         comment: comment || '—',
-        priority: doc.priority,
+        priority: priLabel(doc.priority),
         login_url: window.location.href.split('?')[0] + (IS_KR ? '?branch=kr' : ''),
         // Amazon 구매 요청 승인 알림에만 추가 — 메일에서 바로 결제 진행 가능 (일반 벤더는 제외)
         is_amazon_purchase: isAmazonDoc(doc),
@@ -1573,7 +1601,7 @@ function enterApproval() {
   try{ sessionStorage.setItem('rs_screen','approval'); }catch(e){}
   document.getElementById('hubScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  document.getElementById('topbarUser').textContent = currentUser.name + ' (' + currentUser.role + ')';
+  document.getElementById('topbarUser').textContent = currentUser.name + ' (' + roleLabel(currentUser.role) + ')';
   document.getElementById('nav-settings').style.display = (currentUser.role === 'Admin' || currentUser.role === 'Manager') ? 'flex' : 'none';
   { const nt = document.getElementById('nav-trash'); if (nt) nt.style.display = currentUser.role === 'Admin' ? 'flex' : 'none'; }
   document.getElementById('exportExcelBtn').style.display = currentUser.role === 'Admin' ? 'inline-flex' : 'none';
@@ -3113,7 +3141,9 @@ function statusBadgeFor(doc) {
   }
   return html;
 }
-function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-US', {year:'numeric', month:'short', day:'numeric'}); }
+function fmtDate(ts) { return new Date(ts).toLocaleDateString(IS_KR?'ko-KR':'en-US', {year:'numeric', month:'short', day:'numeric'}); }
+function priLabel(p) { return IS_KR ? (_KRDICT[p] || p) : p; }
+function roleLabel(r) { return IS_KR ? (_KRDICT[r] || r) : r; }
 function fmtDateTime(ts) { try { return new Date(ts).toLocaleString(IS_KR?'ko-KR':'en-US', {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e) { return fmtDate(ts); } }
 function escHtml(t) { return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function sameId(a, b) { return !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase(); }
@@ -3130,8 +3160,8 @@ function renderTable(tbodyId, data, mode) {
       return `<tr>
         <td>${doc.docNo}</td><td>${doc.title}${preApprovalBadge(doc)}</td><td>${doc.type}</td>
         <td>${getUserName(doc.requesterId)}</td>
-        <td><span class="status-badge status-${doc.priority==='Urgent'?'rejected':doc.priority==='High'?'pending':'draft'}">${doc.priority}</span></td>
-        <td>Step ${myStep+1} / ${doc.approvers.length}</td>
+        <td><span class="status-badge status-${doc.priority==='Urgent'?'rejected':doc.priority==='High'?'pending':'draft'}">${priLabel(doc.priority)}</span></td>
+        <td>${IS_KR?(myStep+1)+'단계 / 총 '+doc.approvers.length+'단계':'Step '+(myStep+1)+' / '+doc.approvers.length}</td>
         <td>${fmtDate(doc.createdAt)}</td>
         <td style="white-space:nowrap">${actions}</td>
       </tr>`;
@@ -3977,7 +4007,7 @@ function viewDoc(docId) {
         ? `<div class="file-item">📄 <a href="${f.url}" target="_blank">${f.name}</a></div>`
         : `<div class="file-item">📎 <span>${f.name}</span></div>`
       ).join('')
-    : '<span style="color:var(--mid);font-size:0.85rem;">No attachments</span>';
+    : '<span style="color:var(--mid);font-size:0.85rem;">' + (IS_KR ? '첨부파일 없음' : 'No attachments') + '</span>';
 
   const historyHtml = doc.history.filter(h => h.action !== 'draft' && h.action !== 'draft_updated').map(h => {   // 임시저장·임시저장 수정 이력은 숨김 (상신부터 표시)
     const cls = h.action==='approved'?'h-approved'
@@ -3987,7 +4017,7 @@ function viewDoc(docId) {
               : h.action==='info_answered'?'h-info_answered'
               : h.action==='submitted'?'h-pending':'h-draft';
     const _HL = {submitted:'상신',approved:'승인',rejected:'반려',resubmitted:'재상신',draft:'임시저장',
-                 info_requested:'질의',info_answered:'답변',commented:'의견',amount_updated:'결제액 갱신',settled:'정산',refunded:'환불'};
+                 info_requested:'질의',info_answered:'답변',commented:'의견',amount_updated:'결제액 갱신',settled:'정산',refunded:'환불',unsettled:'정산 취소',refund_removed:'환불 삭제',restored:'복원'};
     const label = IS_KR ? (_HL[h.action] || h.action)
               : h.action==='resubmitted' ? 'RESUBMITTED'
               : h.action==='info_requested' ? 'INFO REQUESTED'
@@ -4012,9 +4042,9 @@ function viewDoc(docId) {
 
   const approverDetail = (doc.approvers||[]).map((a, i) =>
     `<div style="font-size:0.82rem;color:var(--light);display:flex;gap:1rem;align-items:center;padding:0.3rem 0;flex-wrap:wrap;">
-      <span style="color:var(--accent);min-width:55px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">STEP ${i+1}</span>
+      <span style="color:var(--accent);min-width:55px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;">${IS_KR?(i+1)+'단계':'STEP '+(i+1)}</span>
       <span>${getUserName(a.id)}</span>
-      <span class="status-badge status-${a.status}">${IS_KR?({pending:'대기',approved:'승인',rejected:'반려'}[a.status]||a.status):a.status}</span>
+      <span class="status-badge status-${a.status}">${IS_KR?({pending:'대기',waiting:'순번 대기',approved:'승인',rejected:'반려'}[a.status]||a.status):a.status}</span>
       ${a.comment?`<span style="color:var(--mid);font-style:italic">"${a.comment}"</span>`:''}
     </div>`
   ).join('');
@@ -4023,7 +4053,7 @@ function viewDoc(docId) {
     <div class="detail-row"><div class="detail-label">Doc No.</div><div class="detail-value">${doc.docNo}</div></div>
     <div class="detail-row"><div class="detail-label">Status</div><div class="detail-value">${statusBadgeFor(doc)}</div></div>
     <div class="detail-row"><div class="detail-label">Type</div><div class="detail-value">${doc.type}</div></div>
-    <div class="detail-row"><div class="detail-label">Priority</div><div class="detail-value">${doc.priority}</div></div>
+    <div class="detail-row"><div class="detail-label">Priority</div><div class="detail-value">${priLabel(doc.priority)}</div></div>
     <div class="detail-row"><div class="detail-label">Requester</div><div class="detail-value">${getUserName(doc.requesterId)}</div></div>
     ${preApprovalDetailRow(doc)}
     <div class="detail-row" style="flex-direction:column;gap:0.8rem;">
@@ -4074,12 +4104,13 @@ function viewDoc(docId) {
 }
 
 // ── APPROVE / REJECT ──
+const DEFAULT_APPROVE_COMMENT = IS_KR ? '승인합니다.' : 'Approved.';  // 승인 의견 기본값 — 버튼만 눌러도 입력됨
 function openApprove(docId, action) {
   currentDocId = docId;
   document.getElementById('approveModalTitle').textContent = action==='approve'
     ? (IS_KR ? '✓ 문서 승인' : '✓ Approve Document')
     : (IS_KR ? '✕ 문서 반려' : '✕ Reject Document');
-  document.getElementById('approveComment').value = '';
+  document.getElementById('approveComment').value = action === 'approve' ? DEFAULT_APPROVE_COMMENT : '';
   const _lb = document.querySelector('#approveModal .field-label');
   if (_lb) _lb.textContent = IS_KR ? '의견 (선택)' : 'Comment (Optional)';
   document.getElementById('approveComment').placeholder = IS_KR ? '의견을 남기세요...' : 'Leave a comment...';
@@ -4089,12 +4120,13 @@ function openApprove(docId, action) {
       ${action==='approve'?(IS_KR?'승인 확정':'Confirm Approve'):(IS_KR?'반려 확정':'Confirm Reject')} →
     </button>`;
   document.getElementById('approveModal').classList.add('open');
+  if (action === 'approve') document.getElementById('approveComment').select();  // 바로 타이핑하면 기본값이 대체됨
 }
 let _approveBusy = false;  // 승인 버튼 연타 방지 (2026-10-01, RSI-0561 이중 승인 → 자산 거래 중복 생성 사고)
 async function doApprove(action) {
   if (_approveBusy) return;
   const doc = docs.find(d => d.id === currentDocId); if (!doc) return;
-  const comment = document.getElementById('approveComment').value.trim();
+  const comment = document.getElementById('approveComment').value.trim() || (action === 'approve' ? DEFAULT_APPROVE_COMMENT : '');
   _approveBusy = true;
   let res;
   try { res = await processApproval(doc, action, comment); } finally { _approveBusy = false; }
@@ -4539,11 +4571,11 @@ function renderUsers() {
       <div class="user-avatar">${u.name.charAt(0)}</div>
       <div class="user-info">
         <div class="user-name">${u.name}</div>
-        <div class="user-role">${u.role} · ${u.id}${u.email?' · '+u.email:' · <span style="color:var(--red)">No email</span>'}</div>
+        <div class="user-role">${roleLabel(u.role)} · ${u.id}${u.email?' · '+u.email:' · <span style="color:var(--red)">'+(IS_KR?'이메일 없음':'No email')+'</span>'}</div>
       </div>
       <div style="display:flex;gap:0.5rem;align-items:center;">
         ${u.id === currentUser.id
-          ? `<span style="font-size:0.75rem;color:var(--accent)">YOU</span>
+          ? `<span style="font-size:0.75rem;color:var(--accent)">${IS_KR?'나':'YOU'}</span>
              <button class="btn-sm btn-sm-accent" onclick="openEditUser('${u.id}')">Edit</button>`
           : isAdminOrMgr
             ? `<button class="btn-sm btn-sm-accent" onclick="openEditUser('${u.id}')">Edit</button>
@@ -4589,13 +4621,13 @@ async function saveEditUser() {
   const pw = document.getElementById('editUserPw').value;
   const pwConfirm = document.getElementById('editUserPwConfirm').value;
   const role = document.getElementById('editUserRole').value;
-  if (!name) { alert('Please enter a name.'); return; }
+  if (!name) { alert(IS_KR ? '이름을 입력하세요.' : 'Please enter a name.'); return; }
   if (pw && pw !== pwConfirm) { alert('비밀번호가 일치하지 않습니다.'); return; }
   if (pw && pw.length < 6) { alert('비밀번호는 6자 이상이어야 합니다.'); return; }
   try {
     await adminApiCall('/admin/update-user', { id, name, email, role, password: pw || undefined });
     if (id === currentUser.id) {
-      document.getElementById('topbarUser').textContent = name + ' (' + role + ')';
+      document.getElementById('topbarUser').textContent = name + ' (' + roleLabel(role) + ')';
     }
     closeModal('editUserModal');
     alert('✓ 저장되었습니다!' + (pw ? '\n새 비밀번호로 다시 로그인하세요.' : ''));
@@ -4615,23 +4647,23 @@ async function addUser() {
   const email = document.getElementById('newUserEmail').value.trim();
   const pw    = document.getElementById('newUserPw').value;
   const role  = document.getElementById('newUserRole').value;
-  if (!name || !id || !pw) { alert('Please fill in required fields.'); return; }
+  if (!name || !id || !pw) { alert(IS_KR ? '필수 항목을 입력하세요.' : 'Please fill in required fields.'); return; }
   if (pw.length < 6) { alert('비밀번호는 6자 이상이어야 합니다.'); return; }
-  if (users.find(u => u.id === id)) { alert('User ID already exists.'); return; }
+  if (users.find(u => u.id === id)) { alert(IS_KR ? '이미 있는 아이디입니다.' : 'User ID already exists.'); return; }
   try {
     await adminApiCall('/admin/create-user', { email: id, password: pw, name, role });
     closeModal('userModal');
     ['newUserName','newUserId','newUserEmail','newUserPw'].forEach(i => document.getElementById(i).value = '');
-    alert('✓ User added!');
+    alert(IS_KR ? '✓ 사용자를 추가했습니다.' : '✓ User added!');
   } catch (e) {
     alert('저장 오류: ' + e.message);
   }
 }
 async function removeUser(id) {
-  if (!confirm('Remove this user?')) return;
+  if (!confirm(IS_KR ? '이 사용자를 제거할까요?' : 'Remove this user?')) return;
   try {
     await adminApiCall('/admin/delete-user', { id });
-    alert('✓ User removed!');
+    alert(IS_KR ? '✓ 사용자를 제거했습니다.' : '✓ User removed!');
   } catch (e) {
     alert('삭제 오류: ' + e.message);
   }
@@ -4640,9 +4672,9 @@ async function removeUser(id) {
 // ── SETTINGS ──
 async function testEmail() {
   const me = users.find(u => u.id === currentUser.id);
-  if (!me || !me.email) { alert('Please set your email address in Users page first.'); return; }
+  if (!me || !me.email) { alert(IS_KR ? '사용자 화면에서 이메일 주소를 먼저 등록하세요.' : 'Please set your email address in Users page first.'); return; }
   const s = document.getElementById('emailSettingStatus');
-  s.textContent = 'Sending...'; s.style.color = 'var(--accent)';
+  s.textContent = IS_KR ? '발송 중...' : 'Sending...'; s.style.color = 'var(--accent)';
   try {
     const res = await fetch(EMAIL_API_BASE + '/send-email', {
       method: 'POST',
@@ -4662,9 +4694,9 @@ async function testEmail() {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || ('HTTP ' + res.status));
     }
-    s.textContent = '✓ Test email sent!'; s.style.color = 'var(--green)';
+    s.textContent = IS_KR ? '✓ 테스트 메일을 보냈습니다.' : '✓ Test email sent!'; s.style.color = 'var(--green)';
   } catch(e) {
-    s.textContent = '✕ Failed: ' + (e.message || JSON.stringify(e));
+    s.textContent = (IS_KR ? '✕ 실패: ' : '✕ Failed: ') + (e.message || JSON.stringify(e));
     s.style.color = 'var(--red)';
   }
 }
@@ -4694,7 +4726,7 @@ async function exportToExcel() {
     const requester = users.find(u => sameId(u.id, d.requesterId));
     const approverNames = (d.approvers||[]).map((a, i) => {
       const u = users.find(u => u.id === a.id);
-      return `Step${i+1}: ${u?u.name:a.id} (${a.status==='approved'?'✓승인':a.status==='rejected'?'✕반려':'대기'})`;
+      return `${IS_KR?(i+1)+'단계':'Step'+(i+1)}: ${u?u.name:a.id} (${a.status==='approved'?'✓승인':a.status==='rejected'?'✕반려':'대기'})`;
     }).join(' → ');
     return {
       '문서번호': d.docNo||'', '제목': d.title||'', '종류': d.type||'', '우선순위': d.priority||'',
